@@ -1,3 +1,17 @@
+// Animal Go-Stop Mapping
+const animalCardCounts = {
+    '01_gwang.jpg': 1,
+    '02_yul.jpg': 1,
+    '04_yul.jpg': 1,
+    '06_yul.jpg': 2,
+    '07_yul.jpg': 3,
+    '08_yul.jpg': 3,
+    '10_yul.jpg': 1,
+    '11_gwang.jpg': 1,
+    '12_gwang.jpg': 2,
+    '12_yul.jpg': 1
+};
+
 // Define all 48 cards
 const hwatuDeckSpecs = [
     { id: 1, month: 1, type: "gwang", name: "1월 광" },
@@ -121,6 +135,10 @@ function initGame() {
     window.playerMaxScore = 0;
     window.comMaxScore = 0;
 
+    // Animal tracking
+    window.playerAnimals = 0;
+    window.comAnimals = 0;
+
     window.playerShook = false;
     window.comShook = false;
     window.waitingForGiri = false;
@@ -200,11 +218,22 @@ function updateJokboBadges(owner, breakdown) {
     const container = document.getElementById(containerId);
     if (!container) return;
 
+    const oppCollected = (owner === 'player') ? comCollected : playerCollected;
+
+    // Check if Godori is blocked: opponent has any of yul 2, 4, 8
+    const godoriBlocked = oppCollected.yul.some(c => [2, 4, 8].includes(c.month));
+    // Check if Hongdan is blocked: opponent has any of tti 1, 2, 3
+    const hongdanBlocked = oppCollected.tti.some(c => [1, 2, 3].includes(c.month));
+    // Check if Chodan is blocked: opponent has any of tti 4, 5, 7
+    const chodanBlocked = oppCollected.tti.some(c => [4, 5, 7].includes(c.month));
+    // Check if Cheongdan is blocked: opponent has any of tti 6, 9, 10
+    const cheongdanBlocked = oppCollected.tti.some(c => [6, 9, 10].includes(c.month));
+
     const items = [
-        { key: 'godori', count: breakdown.godoriCount, label: '고도리' },
-        { key: 'hongdan', count: breakdown.hongdanCount, label: '홍단' },
-        { key: 'chodan', count: breakdown.chodanCount, label: '초단' },
-        { key: 'cheongdan', count: breakdown.cheongdanCount, label: '청단' }
+        { key: 'godori', count: breakdown.godoriCount, label: '고도리', blocked: godoriBlocked },
+        { key: 'hongdan', count: breakdown.hongdanCount, label: '홍단', blocked: hongdanBlocked },
+        { key: 'chodan', count: breakdown.chodanCount, label: '초단', blocked: chodanBlocked },
+        { key: 'cheongdan', count: breakdown.cheongdanCount, label: '청단', blocked: cheongdanBlocked }
     ];
 
     items.forEach(item => {
@@ -215,7 +244,7 @@ function updateJokboBadges(owner, breakdown) {
                 badgeEl.classList.add('active');
                 badgeEl.innerText = item.label;
                 badgeEl.style.display = 'inline-block';
-            } else if (item.count === 2) {
+            } else if (item.count === 2 && !item.blocked) {
                 badgeEl.classList.remove('active');
                 badgeEl.classList.add('emergency');
                 badgeEl.innerText = `${item.label} 비상!`;
@@ -849,8 +878,13 @@ function processGiriPhase(turnOwner) {
                 stolenCount++;
             }
 
-            let postStealAction = () => {
+            let postStealAction = async () => {
                 renderBoard();
+
+                // Allow browser a moment to visually paint the cards moving to the collection area
+                await new Promise(resolve => setTimeout(resolve, 150));
+
+                await evaluateAnimalRules(turnOwner);
                 let currentScoreObj = calculateScore(turnOwner === 'player' ? playerCollected : comCollected, turnOwner);
                 let maxScore = turnOwner === 'player' ? window.playerMaxScore : window.comMaxScore;
 
@@ -902,6 +936,168 @@ function processGiriPhase(turnOwner) {
                 finishGiriPhase();
             }
         }
+    }
+}
+function processAnimalMoney(turnOwner, oppHasZero) {
+    let amount = oppHasZero ? 2000 : 1000;
+    if (turnOwner === 'player') {
+        if (comMoney < amount) amount = comMoney;
+        playerMoney += amount;
+        comMoney -= amount;
+    } else {
+        if (playerMoney < amount) amount = playerMoney;
+        comMoney += amount;
+        playerMoney -= amount;
+    }
+
+    playerMoneyEl.innerText = playerMoney.toLocaleString();
+    comMoneyEl.innerText = comMoney.toLocaleString();
+}
+
+function showEventAlertWithConfirm(message, owner) {
+    return new Promise(resolve => {
+        let overlay = document.createElement('div');
+        overlay.style.position = 'fixed';
+        overlay.style.top = '0';
+        overlay.style.left = '0';
+        overlay.style.width = '100vw';
+        overlay.style.height = '100vh';
+        overlay.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+        overlay.style.zIndex = '99998';
+        overlay.style.display = 'flex';
+        overlay.style.justifyContent = 'center';
+        overlay.style.alignItems = 'center';
+
+        let div = document.createElement('div');
+        div.style.backgroundColor = owner === 'player' ? 'rgba(0, 0, 255, 0.9)' : 'rgba(255, 0, 0, 0.9)';
+        div.style.color = 'white';
+        div.style.padding = '15px 25px';
+        div.style.fontSize = '1.2rem';
+        div.style.fontWeight = 'bold';
+        div.style.borderRadius = '8px';
+        div.style.boxShadow = '0 5px 15px rgba(0,0,0,0.5)';
+        div.style.textAlign = 'center';
+        div.style.zIndex = '99999';
+
+        let textObj = document.createElement('div');
+        textObj.innerText = message;
+        textObj.style.marginBottom = '15px';
+        div.appendChild(textObj);
+
+        let btn = document.createElement('button');
+        btn.innerText = '확인';
+        btn.style.fontSize = '1rem';
+        btn.style.padding = '8px 16px';
+        btn.style.cursor = 'pointer';
+        btn.style.borderRadius = '5px';
+        btn.style.border = 'none';
+        btn.style.backgroundColor = 'white';
+        btn.style.color = 'black';
+        btn.style.fontWeight = 'bold';
+
+        btn.onclick = () => {
+            overlay.remove();
+            resolve();
+        };
+
+        div.appendChild(btn);
+        overlay.appendChild(div);
+        document.body.appendChild(overlay);
+
+        btn.focus();
+    });
+}
+
+async function evaluateAnimalRules(turnOwner) {
+    const isPlayer = turnOwner === 'player';
+    const collection = isPlayer ? playerCollected : comCollected;
+    const oppCollection = isPlayer ? comCollected : playerCollected;
+
+    // Count current animals
+    let currentAnimals = 0;
+    // Iterate over all collections to cleanly find animals by image name
+    ['gwang', 'yul', 'tti', 'pi'].forEach(type => {
+        collection[type].forEach(card => {
+            const fileName = card.imgSrc.split('/').pop();
+            // 7월 열끝 is already accurately mapped to 3 in animalCardCounts
+            if (animalCardCounts[fileName]) {
+                currentAnimals += animalCardCounts[fileName];
+            }
+        });
+    });
+
+    // Count opponent's current animals
+    let oppAnimals = 0;
+    ['gwang', 'yul', 'tti', 'pi'].forEach(type => {
+        oppCollection[type].forEach(card => {
+            const fileName = card.imgSrc.split('/').pop();
+            if (animalCardCounts[fileName]) {
+                oppAnimals += animalCardCounts[fileName];
+            }
+        });
+    });
+
+    let prevAnimals = isPlayer ? window.playerAnimals : window.comAnimals;
+
+    if (currentAnimals > prevAnimals && currentAnimals >= 3) {
+        // Gain money
+        let chargeableAnimals = 0;
+        if (prevAnimals < 3) {
+            chargeableAnimals = currentAnimals - 2;
+        } else {
+            chargeableAnimals = currentAnimals - prevAnimals;
+        }
+
+        const baseAmount = chargeableAnimals * 1000;
+        const isAnimalBak = (oppAnimals === 0);
+        let finalAmount = isAnimalBak ? baseAmount * 2 : baseAmount;
+
+        // Apply globals (shake/bomb)
+        const multiplier = isPlayer ? window.playerMultiplier : window.comMultiplier;
+        finalAmount *= multiplier;
+
+        // Convert to rough Korean word format
+        let amountStr = "";
+        let numForStr = finalAmount;
+
+        if (numForStr >= 10000) {
+            let man = Math.floor(numForStr / 10000);
+            let chun = numForStr % 10000;
+            amountStr = (man > 1 ? man : "") + "만";
+            if (chun > 0) amountStr += (chun / 1000) + "천";
+            amountStr += "원";
+        } else {
+            if (numForStr === 1000) amountStr = "천원";
+            else if (numForStr === 2000) amountStr = "이천원";
+            else if (numForStr === 3000) amountStr = "삼천원";
+            else if (numForStr === 4000) amountStr = "사천원";
+            else if (numForStr === 5000) amountStr = "오천원";
+            else if (numForStr === 6000) amountStr = "육천원";
+            else if (numForStr === 7000) amountStr = "칠천원";
+            else if (numForStr === 8000) amountStr = "팔천원";
+            else if (numForStr === 9000) amountStr = "구천원";
+            else amountStr = numForStr.toLocaleString() + "원";
+        }
+
+        let suffix = "";
+        if (multiplier > 1 || isAnimalBak) {
+            let reasons = [];
+            if (multiplier > 1) reasons.push(`배수x${multiplier}`);
+            if (isAnimalBak) reasons.push("동물박");
+            suffix = ` (${reasons.join(", ")})`;
+        }
+
+        const msg = `앗싸! ${amountStr}${suffix}\n(현재 동물이 ${currentAnimals}마리)`;
+
+        processAnimalMoney(turnOwner, finalAmount, false); // pass finalAmount directly, skip double-baking in the function
+        await showEventAlertWithConfirm(msg, turnOwner);
+    }
+
+    // Save state
+    if (isPlayer) {
+        window.playerAnimals = currentAnimals;
+    } else {
+        window.comAnimals = currentAnimals;
     }
 }
 
@@ -1571,7 +1767,7 @@ function showCardSelection(options, onSelect) {
 
 // Event Listeners
 btnDeal.addEventListener('click', dealCards);
-document.getElementById('btn-shake').addEventListener('click', () => {
+document.getElementById('btn-shake').addEventListener('click', function () {
     // 플레이어 턴일 때만 유효함
     if (currentTurn === 'player' && !isDealing) {
         const month = parseInt(this.dataset.month);
