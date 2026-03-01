@@ -1,0 +1,523 @@
+﻿* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Noto Sans KR', sans-serif;
+    background-color: #222;
+    color: white;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    overflow: hidden;
+    /* Prevent scroll on PC game board */
+}
+
+#game-board {
+    width: 1200px;
+    height: 800px;
+    background: radial-gradient(circle, #2e7d32 0%, #1b5e20 80%);
+    border-radius: 20px;
+    box-shadow: inset 0 0 50px rgba(0, 0, 0, 0.5), 0 10px 30px rgba(0, 0, 0, 0.8);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 20px;
+    position: relative;
+}
+
+/* Common Player Area */
+.player-area {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    height: 200px;
+}
+
+#computer-area {
+    align-items: flex-start;
+}
+
+.info-panel {
+    width: 200px;
+    background: rgba(0, 0, 0, 0.6);
+    padding: 15px;
+    border-radius: 10px;
+    border: 1px solid #4CAF50;
+}
+
+.info-panel h2 {
+    font-size: 1.0rem;
+    margin-bottom: 5px;
+    color: #ffd700;
+}
+
+.score {
+    font-size: 1.1rem;
+    font-weight: bold;
+    margin-bottom: 5px;
+}
+
+.money {
+    font-size: 0.9rem;
+    font-weight: bold;
+    color: #4CAF50;
+    margin-bottom: 10px;
+    background: rgba(0, 0, 0, 0.4);
+    padding: 3px 6px;
+    border-radius: 4px;
+}
+
+.status-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+}
+
+.action-btn {
+    margin-top: 15px;
+    width: 100%;
+    padding: 10px;
+    background: #df2a2a;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    font-size: 1rem;
+    font-weight: bold;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.action-btn:hover {
+    background: #ff4444;
+}
+
+/* Hand Cards (Flex container) */
+.hand-cards {
+    display: flex;
+    flex-wrap: wrap;
+    gap: -30px;
+    /* Overlap hand cards slightly */
+    width: 600px;
+    height: 100%;
+    align-items: flex-end;
+}
+
+#computer-area .hand-cards {
+    align-items: flex-start;
+}
+
+/* Collected Cards */
+.collected-cards {
+    width: 300px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.card-group {
+    background: rgba(255, 255, 255, 0.1);
+    padding: 10px;
+    border-radius: 5px;
+    font-size: 0.9rem;
+    min-height: 50px;
+    position: relative;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+}
+
+.mini-cards {
+    position: absolute;
+    top: 5px;
+    left: 45px;
+    height: 40px;
+    width: 200px;
+}
+
+.mini-card-img {
+    height: 40px;
+    width: 25px;
+    object-fit: cover;
+    position: absolute;
+    box-shadow: 1px 1px 3px rgba(0, 0, 0, 0.5);
+    border-radius: 2px;
+    background-color: white;
+}
+
+/* Center / Floor Area */
+#center-area {
+    flex-grow: 1;
+    display: flex;
+    gap: 40px;
+    align-items: center;
+    justify-content: center;
+    margin: 20px 0;
+}
+
+#deck-area {
+    width: 100px;
+    position: relative;
+}
+
+#deck {
+    width: 70px;
+    height: 110px;
+    background-color: #aa2222;
+    border-radius: 5px;
+    border: 2px solid white;
+    box-shadow: 2px 2px 10px rgba(0, 0, 0, 0.5);
+    position: relative;
+    cursor: not-allowed;
+}
+
+.deck-count {
+    position: absolute;
+    bottom: -30px;
+    left: 0;
+    right: 0;
+    text-align: center;
+    font-size: 0.75rem;
+    background: rgba(0, 0, 0, 0.7);
+    padding: 2px 5px;
+    border-radius: 3px;
+}
+
+#floor-area {
+    width: 800px;
+    height: 250px;
+    background: rgba(0, 0, 0, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 10px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 15px;
+    align-content: flex-start;
+}
+
+/* Card Elements */
+.card-img {
+    width: 60px;
+    height: 95px;
+    object-fit: cover;
+    border-radius: 5px;
+    box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.4);
+    transition: transform 0.2s, box-shadow 0.2s, top 0.2s;
+    background-color: white;
+    margin-right: -25px;
+    position: relative;
+    top: 0;
+}
+
+/* Playable state indicator */
+.playable {
+    cursor: pointer;
+}
+
+.playable:hover {
+    transform: translateY(-20px) scale(1.1);
+    box-shadow: 2px 12px 15px rgba(0, 0, 0, 0.6);
+    z-index: 50 !important;
+}
+
+/* Active Turn Highlighter */
+.active-turn .info-panel {
+    border: 3px solid #ffeb3b;
+    box-shadow: 0 0 20px rgba(255, 235, 59, 0.4);
+}
+
+#computer-area .card-img {
+    background-color: #aa2222;
+    cursor: default;
+}
+
+#computer-area .card-img:hover {
+    transform: none;
+    box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.4);
+}
+
+#floor-area .card-img {
+    margin-right: 0;
+}
+
+/* Modal Overlay Base */
+.modal-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.4);
+    z-index: 10000;
+    display: none;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    border-radius: 20px;
+    backdrop-filter: blur(1px);
+}
+
+.modal-content {
+    background: #1a1a1a;
+    padding: 30px 50px;
+    border-radius: 15px;
+    border: 2px solid #4CAF50;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8);
+    text-align: center;
+    max-width: 80%;
+}
+
+.modal-content h2 {
+    color: white;
+    margin-bottom: 25px;
+    font-size: 1.5rem;
+    line-height: 1.4;
+    text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.5);
+}
+
+/* Card Selection specific */
+#selection-cards {
+    display: flex;
+    gap: 20px;
+    justify-content: center;
+}
+
+.selectable-card {
+    width: 100px;
+    height: 160px;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+    border: 2px solid transparent;
+    border-radius: 5px;
+}
+
+.selectable-card:hover {
+    transform: scale(1.1) translateY(-10px);
+    box-shadow: 0 0 20px rgba(255, 235, 59, 0.6);
+    border: 2px solid #ffeb3b;
+}
+
+/* Go/Stop Selection specific */
+.gostop-buttons {
+    display: flex;
+    gap: 25px;
+    justify-content: center;
+}
+
+.btn-gostop {
+    padding: 12px 35px;
+    font-size: 1.2rem;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+    font-weight: bold;
+    transition: transform 0.2s, background 0.2s, box-shadow 0.2s;
+    color: white;
+    min-width: 120px;
+}
+
+#btn-go {
+    background-color: #4CAF50;
+}
+
+#btn-go:hover {
+    background-color: #45a049;
+    transform: scale(1.05);
+    box-shadow: 0 0 15px rgba(76, 175, 80, 0.5);
+}
+
+#btn-stop {
+    background-color: #f44336;
+}
+
+#btn-stop:hover {
+    background-color: #da190b;
+    transform: scale(1.05);
+    box-shadow: 0 0 15px rgba(244, 67, 54, 0.5);
+}
+
+/* Go/Stop Badge */
+.go-badge {
+    background-color: #f44336;
+    color: white;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 0.8rem;
+    margin-left: 5px;
+    vertical-align: middle;
+}
+
+@keyframes pulse-badge {
+    0% {
+        transform: scale(1);
+        opacity: 1;
+    }
+
+    50% {
+        transform: scale(1.1);
+        opacity: 0.8;
+    }
+
+    100% {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+.shake-badge {
+    background-color: #ff9800;
+    /* Orange */
+    color: white;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 0.8rem;
+    margin-left: 5px;
+    vertical-align: middle;
+    animation: pulse-badge 1s infinite alternate;
+    box-shadow: 0 0 8px rgba(255, 152, 0, 0.8);
+    display: inline-block;
+}
+
+.bomb-badge {
+    background-color: #9c27b0;
+    /* Purple for Bomb */
+    color: white;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 0.8rem;
+    margin-left: 5px;
+    vertical-align: middle;
+    animation: pulse-badge 0.5s infinite alternate;
+    box-shadow: 0 0 10px rgba(156, 39, 176, 0.9);
+    display: inline-block;
+}
+
+@keyframes requireClick {
+    0% {
+        transform: scale(1);
+        box-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
+    }
+
+    50% {
+        transform: scale(1.05) rotate(2deg);
+        box-shadow: 0 0 25px rgba(255, 0, 0, 1);
+        border-color: red;
+    }
+
+    100% {
+        transform: scale(1);
+        box-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
+    }
+}
+
+.clickable-deck {
+    cursor: pointer !important;
+    animation: requireClick 0.8s infinite !important;
+    border: 3px solid red !important;
+}
+
+/* 족보 인디케이터 스타일 */
+.jokbo-status {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    margin-top: 8px;
+    justify-content: center;
+}
+
+.jokbo-badge {
+    display: none;
+    /* 기본 숨김 */
+    padding: 2px 8px;
+    font-size: 0.85rem;
+    font-weight: bold;
+    border-radius: 4px;
+    color: white;
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.jokbo-badge.active {
+    display: inline-block;
+    animation: badgePulse 1.5s infinite;
+}
+
+.jokbo-badge.emergency {
+    display: inline-block;
+    background-color: #ff0000 !important;
+    animation: emergencyFlash 0.5s infinite alternate;
+    box-shadow: 0 0 15px #ff0000;
+    z-index: 10;
+}
+
+@keyframes emergencyFlash {
+    0% {
+        opacity: 0.6;
+        transform: scale(1);
+    }
+
+    100% {
+        opacity: 1;
+        transform: scale(1.1);
+    }
+}
+
+.jokbo-badge.godori {
+    background-color: #f44336;
+}
+
+.jokbo-badge.hongdan {
+    background-color: #e91e63;
+}
+
+.jokbo-badge.chodan {
+    background-color: #ff9800;
+}
+
+.jokbo-badge.cheongdan {
+    background-color: #2196f3;
+}
+
+@keyframes badgePulse {
+    0% {
+        transform: scale(1);
+        box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.4);
+    }
+
+    50% {
+        transform: scale(1.05);
+        box-shadow: 0 0 10px 0 rgba(255, 255, 255, 0.6);
+    }
+
+    100% {
+        transform: scale(1);
+        box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.4);
+    }
+}
+
+/* 획득 대기 중인 패 (기울어짐 연출) */
+.pending-capture {
+    position: relative;
+    transform: rotate(-10deg) translate(5px, -5px) !important;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.5);
+    z-index: 50 !important;
+    border: 2px solid gold !important;
+}
+
+.pending-capture::after {
+    content: "획득예정";
+    position: absolute;
+    bottom: -15px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: gold;
+    color: black;
+    font-size: 10px;
+    padding: 1px 3px;
+    border-radius: 3px;
+    white-space: nowrap;
+}

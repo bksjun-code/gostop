@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>정통 웹 고스톱</title>
+    <link rel="stylesheet" href="style.css?v=2">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700&display=swap" rel="stylesheet">
+</head>
+
+<body>
+    <div id="game-board">
+        <!-- 상대방(컴퓨터) 영역 -->
+        <div id="computer-area" class="player-area">
+            <div class="info-panel">
+                <h2>컴퓨터
+                    <span id="com-go-count" class="go-badge" style="display:none;"></span>
+                    <span id="com-shake-badge" class="shake-badge" style="display:none;">흔듦</span>
+                    <span id="com-bomb-badge" class="bomb-badge" style="display:none;">폭탄</span>
+                </h2>
+                <div class="score">점수: <span id="com-score">0</span>점</div>
+                <div class="money">보유 금액: <span id="com-money">50000</span>원</div>
+                <div class="jokbo-status" id="com-jokbo-status">
+                    <span class="jokbo-badge godori">고도리</span>
+                    <span class="jokbo-badge hongdan">홍단</span>
+                    <span class="jokbo-badge chodan">초단</span>
+                    <span class="jokbo-badge cheongdan">청단</span>
+                </div>
+                <div class="status-tags">
+                    <!-- 고, 스톱, 피박 등 상태 태그 -->
+                </div>
+            </div>
+
+            <div class="collected-cards">
+                <div class="card-group gwang-group">
+                    <div class="mini-cards"></div>
+                    <span class="count">0</span>장
+                </div>
+                <div class="card-group yul-group">
+                    <div class="mini-cards"></div>
+                    <span class="count">0</span>장
+                </div>
+                <div class="card-group tti-group">
+                    <div class="mini-cards"></div>
+                    <span class="count">0</span>장
+                </div>
+                <div class="card-group pi-group">
+                    <div class="mini-cards"></div>
+                    <span class="count">0</span>장
+                </div>
+            </div>
+
+            <div id="com-hand" class="hand-cards">
+                <!-- 상대방 손패 (뒷면) -->
+            </div>
+        </div>
+
+        <!-- 바닥(바닥패 & 덱) 영역 -->
+        <div id="center-area">
+            <div id="deck-area" style="position: relative;">
+                <div id="deck" class="card deck-card">
+                    <!-- 남은 덱 뒷면 이미지 -->
+                    <div class="deck-count">기리패: <span id="deck-count">0</span></div>
+                </div>
+            </div>
+
+            <div id="floor-area">
+                <!-- 바닥에 깔린 패들 -->
+            </div>
+        </div>
+
+        <!-- 플레이어 영역 -->
+        <div id="player-area" class="player-area">
+            <div id="player-hand" class="hand-cards">
+                <!-- 내 손패 -->
+            </div>
+
+            <div class="collected-cards">
+                <div class="card-group gwang-group">
+                    <div class="mini-cards"></div>
+                    <span class="count">0</span>장
+                </div>
+                <div class="card-group yul-group">
+                    <div class="mini-cards"></div>
+                    <span class="count">0</span>장
+                </div>
+                <div class="card-group tti-group">
+                    <div class="mini-cards"></div>
+                    <span class="count">0</span>장
+                </div>
+                <div class="card-group pi-group">
+                    <div class="mini-cards"></div>
+                    <span class="count">0</span>장
+                </div>
+            </div>
+
+            <div class="info-panel">
+                <h2>나 (Player)
+                    <span id="player-go-count" class="go-badge" style="display:none;"></span>
+                    <span id="player-shake-badge" class="shake-badge" style="display:none;">흔듦</span>
+                    <span id="player-bomb-badge" class="bomb-badge" style="display:none;">폭탄</span>
+                </h2>
+                <div class="score">점수: <span id="player-score">0</span>점</div>
+                <div class="money">보유 금액: <span id="player-money">50000</span>원</div>
+                <div class="jokbo-status" id="player-jokbo-status">
+                    <span class="jokbo-badge godori">고도리</span>
+                    <span class="jokbo-badge hongdan">홍단</span>
+                    <span class="jokbo-badge chodan">초단</span>
+                    <span class="jokbo-badge cheongdan">청단</span>
+                </div>
+                <div class="status-tags">
+                    <!-- 고, 스톱, 피박 등 상태 태그 -->
+                </div>
+                <!-- 초기화 / 게임시작 버튼 -->
+                <button id="btn-deal" class="action-btn">판 돌리기</button>
+                <button id="btn-shake" class="action-btn"
+                    style="display:none; background-color: #ff9800; margin-top: 10px;">흔들기!</button>
+            </div>
+        </div>
+
+        <!-- 선택 오버레이 -->
+        <div id="card-selection-overlay" class="modal-overlay">
+            <div class="modal-content">
+                <h2>어느 패를 드시겠습니까?</h2>
+                <div id="selection-cards"></div>
+            </div>
+        </div>
+
+        <!-- Go/Stop 오버레이 -->
+        <div id="gostop-selection-overlay" class="modal-overlay">
+            <div class="modal-content">
+                <h2 id="gostop-message">3점 이상이 났습니다!</h2>
+                <div class="gostop-buttons">
+                    <button id="btn-go" class="btn-gostop">고 (Go)</button>
+                    <button id="btn-stop" class="btn-gostop">스톱 (Stop)</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 흔들기 전용 오버레이 -->
+        <div id="shake-overlay" class="modal-overlay">
+            <div class="modal-content" style="border-color: #ffeb3b;">
+                <h2 style="color: #ffeb3b; font-size: 2rem;">흔들기! (SHAKE)</h2>
+                <div id="shake-cards" style="display: flex; gap: 15px; justify-content: center;"></div>
+            </div>
+        </div>
+
+        <!-- 폭탄 전용 오버레이 -->
+        <div id="bomb-overlay" class="modal-overlay">
+            <div class="modal-content" style="border-color: #ff9800;">
+                <h2 style="color: #ff9800; font-size: 2rem;">폭탄! (BOMB)</h2>
+                <div id="bomb-cards" style="display: flex; gap: 15px; justify-content: center;"></div>
+            </div>
+        </div>
+
+        <!-- 게임 결과 모달 -->
+        <div id="result-modal" class="modal-overlay" style="display: none; z-index: 9999;">
+            <div id="result-modal-content" class="modal-content"
+                style="position: absolute; min-width: 350px; padding: 0;">
+                <div id="result-modal-header"
+                    style="cursor: move; padding: 15px; background: #2b2b2b; color: #ffd700; border-radius: 8px 8px 0 0; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #444;">
+                    <span style="font-weight: bold; font-size: 1.2rem;">게임 결과</span>
+                    <span id="close-result-modal"
+                        style="cursor: pointer; font-size: 1.5rem; line-height: 1;">&times;</span>
+                </div>
+                <div id="result-modal-body" style="padding: 20px; text-align: left; color: #fff;">
+                    <!-- 스크립트에서 내용 주입 -->
+                </div>
+                <div style="padding: 15px; text-align: center; border-top: 1px solid #444;">
+                    <button id="modal-confirm-btn" class="action-btn"
+                        style="padding: 10px 30px; font-size: 1.1rem; width: auto;">확인 (Next Game)</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Web Audio API Script (Audio Context must be initialized after user interaction) -->
+    <script type="module">
+        import { playCardSound } from './audio.js';
+
+        // Expose to global so script.js can use it
+        window.playCardSound = playCardSound;
+
+        // Initialize AudioContext on first click to comply with browser autoplay policies
+        document.body.addEventListener('click', () => {
+            // Just a dummy call to trigger context resume if needed
+        }, { once: true });
+    </script>
+    <script src="script.js?v=2"></script>
+</body>
+
+</html>
