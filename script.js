@@ -800,25 +800,26 @@ function animateGiriCard(turnOwner) {
 }
 
 function processGiriPhase(turnOwner) {
-    if (deck.length === 0) {
-        endGame();
-        return;
+    let giriCard = null;
+    let matchedFloorCards = [];
+
+    if (deck.length > 0) {
+        giriCard = deck.shift();
+        matchedFloorCards = floorCards.filter(c => c.month === giriCard.month);
     }
 
-    let giriCard = deck.shift();
-    let matchedFloorCards = floorCards.filter(c => c.month === giriCard.month);
-    let capturedThisTurn = [...window.turnContext.potentialHandCapture];
+    let capturedThisTurn = [...(window.turnContext?.potentialHandCapture || [])];
 
     const isPlayerFinalTurn = (turnOwner === 'player' && playerHand.length === 0);
     const isComFinalTurn = (turnOwner === 'com' && comHand.length === 0);
-    const isLastTurn = isPlayerFinalTurn || isComFinalTurn;
+    const isLastTurn = isPlayerFinalTurn || isComFinalTurn || (deck.length === 0 && !giriCard && playerHand.length === 0 && comHand.length === 0);
 
     // --- Ssanda (Ppeok) Logic ---
     let handCard = window.turnContext ? window.turnContext.playedCard : null;
     let handMatchedCount = (window.turnContext && window.turnContext.matchedFloorCards) ? window.turnContext.matchedFloorCards.length : 0;
     let isPpeok = false;
 
-    if (!isLastTurn && handCard && handCard.month === giriCard.month && handMatchedCount === 1) {
+    if (!isLastTurn && handCard && giriCard && handCard.month === giriCard.month && handMatchedCount === 1) {
         isPpeok = true;
     }
 
@@ -847,13 +848,13 @@ function processGiriPhase(turnOwner) {
 
             if (!isPpeok) {
                 // Detect Jjok (쪽)
-                if (handMatchedCount === 0 && handCard && handCard.month === giriCard.month) {
+                if (handMatchedCount === 0 && handCard && giriCard && handCard.month === giriCard.month) {
                     showEventAlert('쪽!', turnOwner);
                     stolenCount++;
                 }
 
                 // Detect Ttaddak (따닥)
-                if (handMatchedCount === 1 && handCard && handCard.month === giriCard.month) {
+                if (handMatchedCount === 1 && handCard && giriCard && handCard.month === giriCard.month) {
                     showEventAlert('따닥!', turnOwner);
                     stolenCount++;
                 }
@@ -911,7 +912,10 @@ function processGiriPhase(turnOwner) {
         finishGiriPhase();
     } else {
         // Normal Giri Logic
-        if (matchedFloorCards.length === 0) {
+        if (!giriCard) {
+            // No giri card, just finish with whatever the hand card captured
+            finishGiriPhase();
+        } else if (matchedFloorCards.length === 0) {
             floorCards.push(giriCard);
             finishGiriPhase();
         } else if (matchedFloorCards.length === 1) {
