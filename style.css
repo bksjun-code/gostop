@@ -124,18 +124,23 @@ body {
     border-radius: 5px;
     font-size: 0.9rem;
     min-height: 50px;
-    position: relative;
     display: flex;
     justify-content: space-between;
-    align-items: flex-start;
+    align-items: center;
+    gap: 15px;
 }
 
 .mini-cards {
-    position: absolute;
-    top: 5px;
-    left: 45px;
+    flex: 1;
     height: 40px;
-    width: 200px;
+    position: relative;
+    min-width: 100px;
+}
+
+.score-display {
+    white-space: nowrap;
+    font-weight: bold;
+    color: #ffd700;
 }
 
 .mini-card-img {

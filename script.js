@@ -3,12 +3,13 @@ const animalCardCounts = {
     '01_gwang.jpg': 1,
     '02_yul.jpg': 1,
     '04_yul.jpg': 1,
+    '05_yul.jpg': 0,
     '06_yul.jpg': 2,
     '07_yul.jpg': 3,
     '08_yul.jpg': 3,
     '10_yul.jpg': 1,
-    '11_gwang.jpg': 1,
-    '12_gwang.jpg': 2,
+    '11_gwang.jpg': 2,
+    '12_gwang.jpg': 1,
     '12_yul.jpg': 1,
     'double_pi_1.jpg': 2,
     'double_pi_2.jpg': 2,
@@ -186,7 +187,7 @@ function initGame() {
     updateScoreUI();
 }
 
-function renderMiniCards(container, cards) {
+function renderMiniCards(container, cards, points = 0) {
     let imgContainer = container.querySelector('.mini-cards');
     if (!imgContainer) return;
 
@@ -201,7 +202,7 @@ function renderMiniCards(container, cards) {
     });
 
     let countSpan = container.querySelector('.count');
-    if (countSpan) countSpan.innerText = cards.length;
+    if (countSpan) countSpan.innerText = points;
 }
 
 function updateScoreUI() {
@@ -209,10 +210,10 @@ function updateScoreUI() {
 
     // Player Score Update
     const pBreakdown = calculateScore(playerCollected, 'player');
-    renderMiniCards(document.querySelector('#player-area .gwang-group'), playerCollected.gwang);
-    renderMiniCards(document.querySelector('#player-area .yul-group'), playerCollected.yul);
-    renderMiniCards(document.querySelector('#player-area .tti-group'), playerCollected.tti);
-    renderMiniCards(document.querySelector('#player-area .pi-group'), playerCollected.pi);
+    renderMiniCards(document.querySelector('#player-area .gwang-group'), playerCollected.gwang, pBreakdown.gwang);
+    renderMiniCards(document.querySelector('#player-area .yul-group'), playerCollected.yul, pBreakdown.yul);
+    renderMiniCards(document.querySelector('#player-area .tti-group'), playerCollected.tti, pBreakdown.tti);
+    renderMiniCards(document.querySelector('#player-area .pi-group'), playerCollected.pi, pBreakdown.pi);
 
     let pScoreText = pBreakdown.total;
     if (pBreakdown.multiplierObj > 1) {
@@ -223,10 +224,10 @@ function updateScoreUI() {
 
     // Computer Score Update
     const cBreakdown = calculateScore(comCollected, 'com');
-    renderMiniCards(document.querySelector('#computer-area .gwang-group'), comCollected.gwang);
-    renderMiniCards(document.querySelector('#computer-area .yul-group'), comCollected.yul);
-    renderMiniCards(document.querySelector('#computer-area .tti-group'), comCollected.tti);
-    renderMiniCards(document.querySelector('#computer-area .pi-group'), comCollected.pi);
+    renderMiniCards(document.querySelector('#computer-area .gwang-group'), comCollected.gwang, cBreakdown.gwang);
+    renderMiniCards(document.querySelector('#computer-area .yul-group'), comCollected.yul, cBreakdown.yul);
+    renderMiniCards(document.querySelector('#computer-area .tti-group'), comCollected.tti, cBreakdown.tti);
+    renderMiniCards(document.querySelector('#computer-area .pi-group'), comCollected.pi, cBreakdown.pi);
 
     let cScoreText = cBreakdown.total;
     if (cBreakdown.multiplierObj > 1) {
@@ -283,95 +284,107 @@ function updateJokboBadges(owner, breakdown) {
 
 // Basic Score Calculation (simplified for this phase)
 function calculateScore(collected, ownerType) {
-    let breakdown = {
-        total: 0, gwang: 0, yul: 0, tti: 0, pi: 0,
-        piCount: 0, gwangCount: 0,
-        godori: 0, hongdan: 0, chodan: 0, cheongdan: 0,
-        multiplierObj: 1
-    };
+    // Helper function to calculate points for a specific configuration of types
+    function getBaseScore(currentCollected) {
+        let breakdown = {
+            total: 0, gwang: 0, yul: 0, tti: 0, pi: 0,
+            piCount: 0, gwangCount: 0,
+            godoriCount: 0, godori: 0,
+            hongdanCount: 0, hongdan: 0,
+            chodanCount: 0, chodan: 0,
+            cheongdanCount: 0, cheongdan: 0,
+            yulCount: 0, ttiCount: 0,
+            goPoints: 0, multiplierObj: 1
+        };
 
-    // Gwang (광)
-    let gwangCount = collected.gwang.length;
-    let hasBiGwang = collected.gwang.some(c => c.month === 12);
-    if (gwangCount === 5) breakdown.gwang = 15;
-    else if (gwangCount === 4) breakdown.gwang = 4;
-    else if (gwangCount === 3) breakdown.gwang = (hasBiGwang ? 2 : 3);
+        // Gwang (광)
+        let gwangCount = currentCollected.gwang.length;
+        let hasBiGwang = currentCollected.gwang.some(c => c.month === 12);
+        if (gwangCount === 5) breakdown.gwang = 15;
+        else if (gwangCount === 4) breakdown.gwang = 4;
+        else if (gwangCount === 3) breakdown.gwang = (hasBiGwang ? 2 : 3);
+        breakdown.gwangCount = gwangCount;
 
-    // Yul (열끝)
-    let yulCount = collected.yul.length;
-    if (yulCount >= 5) breakdown.yul = yulCount - 4;
+        // Yul (열끝)
+        // Rule: Each defined Yul card counts as 1 for the 5-card point rule.
+        // Independent of the "animal count" used for the A-ssa! bonus.
+        let yulCount = currentCollected.yul.length;
 
-    // 고도리 (Godori)
-    let godoriComp = [2, 4, 8].filter(month => collected.yul.some(c => c.month === month));
-    breakdown.godoriCount = godoriComp.length;
-    if (breakdown.godoriCount === 3) {
-        breakdown.yul += 5;
-        breakdown.godori = 5;
-    }
+        if (yulCount >= 5) breakdown.yul = yulCount - 4;
+        breakdown.yulCount = yulCount;
 
-    // Tti (띠)
-    let ttiCount = collected.tti.length;
-    if (ttiCount >= 5) breakdown.tti = ttiCount - 4;
+        // Godori
+        let godoriComp = [2, 4, 8].filter(m => currentCollected.yul.some(c => c.month === m));
+        breakdown.godoriCount = godoriComp.length;
+        if (breakdown.godoriCount === 3) {
+            breakdown.yul += 5;
+            breakdown.godori = 5;
+        }
 
-    // 홍단 (Hongdan)
-    let hongdanComp = [1, 2, 3].filter(month => collected.tti.some(c => c.month === month));
-    breakdown.hongdanCount = hongdanComp.length;
-    if (breakdown.hongdanCount === 3) {
-        breakdown.tti += 3;
-        breakdown.hongdan = 3;
-    }
+        // Tti (띠)
+        let ttiCount = currentCollected.tti.length;
+        if (ttiCount >= 5) breakdown.tti = ttiCount - 4;
+        breakdown.ttiCount = ttiCount;
 
-    // 초단 (Chodan)
-    let chodanComp = [4, 5, 7].filter(month => collected.tti.some(c => c.month === month));
-    breakdown.chodanCount = chodanComp.length;
-    if (breakdown.chodanCount === 3) {
-        breakdown.tti += 3;
-        breakdown.chodan = 3;
-    }
+        // Hongdan, Chodan, Cheongdan
+        const hComp = [1, 2, 3].filter(m => currentCollected.tti.some(c => c.month === m));
+        breakdown.hongdanCount = hComp.length;
+        if (breakdown.hongdanCount === 3) { breakdown.tti += 3; breakdown.hongdan = 3; }
 
-    // 청단 (Cheongdan)
-    let cheongdanComp = [6, 9, 10].filter(month => collected.tti.some(c => c.month === month));
-    breakdown.cheongdanCount = cheongdanComp.length;
-    if (breakdown.cheongdanCount === 3) {
-        breakdown.tti += 3;
-        breakdown.cheongdan = 3;
-    }
+        const cComp = [4, 5, 7].filter(m => currentCollected.tti.some(c => c.month === m));
+        breakdown.chodanCount = cComp.length;
+        if (breakdown.chodanCount === 3) { breakdown.tti += 3; breakdown.chodan = 3; }
 
-    // Pi (피)
-    let piCount = 0;
-    collected.pi.forEach(c => {
-        if (c.type === 'pi_1' || c.type === 'pi_2') piCount += 1;
-        if (c.type === 'pi_3' || c.type === 'kasu' || c.type === 'bonus') piCount += 2; // 쌍피 및 보너스쌍피
-    });
-    if (piCount >= 10) breakdown.pi = piCount - 9;
+        const chComp = [6, 9, 10].filter(m => currentCollected.tti.some(c => c.month === m));
+        breakdown.cheongdanCount = chComp.length;
+        if (breakdown.cheongdanCount === 3) { breakdown.tti += 3; breakdown.cheongdan = 3; }
 
-    breakdown.piCount = piCount;
-    breakdown.gwangCount = gwangCount;
+        // Pi (피)
+        let piCount = 0;
+        currentCollected.pi.forEach(c => {
+            if (c.type === 'pi_1' || c.type === 'pi_2') piCount += 1;
+            // 9월 열끝이 피로 분류되었거나, 다른 쌍피/보너스인 경우 2점
+            if (c.type === 'pi_3' || c.type === 'kasu' || c.type === 'bonus' || (c.month === 9 && c.type === 'yul')) piCount += 2;
+        });
+        if (piCount >= 10) breakdown.pi = piCount - 9;
+        breakdown.piCount = piCount;
 
-    // Go Points (1-Go: +1, 2-Go: +2, 3-Go+: x2, x4, ...)
-    const ownerGoCount = (ownerType === 'player') ? window.playerGoCount : window.comGoCount;
-    let goPoints = 0;
-    if (ownerGoCount === 1) goPoints = 1;
-    else if (ownerGoCount >= 2) goPoints = 2;
-    breakdown.goPoints = goPoints;
+        const ownerGoCount = (ownerType === 'player') ? window.playerGoCount : window.comGoCount;
+        let goPoints = 0;
+        if (ownerGoCount === 1) goPoints = 1;
+        else if (ownerGoCount >= 2) goPoints = 2;
+        breakdown.goPoints = goPoints;
 
-    // Board Score Total (Sum base points including Go flat bonuses)
-    breakdown.total = breakdown.gwang + breakdown.yul + breakdown.tti + breakdown.pi + goPoints;
+        breakdown.total = breakdown.gwang + breakdown.yul + breakdown.tti + breakdown.pi + goPoints;
 
-    // Multipliers (Shake, Bomb, and 3+ Go)
-    let totalMult = (ownerType === 'player') ? window.playerMultiplier : window.comMultiplier;
-
-    // Applying High Go Multiplier (3+ Go)
-    if (ownerGoCount >= 3) {
-        totalMult *= Math.pow(2, ownerGoCount - 2);
-    }
-
-    if (totalMult > 1) {
+        // Multipliers
+        let totalMult = (ownerType === 'player') ? window.playerMultiplier : window.comMultiplier;
+        if (ownerGoCount >= 3) totalMult *= Math.pow(2, ownerGoCount - 2);
         breakdown.multiplierObj = totalMult;
         breakdown.total *= totalMult;
+
+        return breakdown;
     }
 
-    return breakdown;
+    // Handle 9-month card (Kikku) choice
+    const kiku = collected.yul.find(c => c.month === 9);
+    if (!kiku) {
+        return getBaseScore(collected);
+    }
+
+    // Option A: 9-month is an Animal (default position in yul array)
+    let scoreA = getBaseScore(collected);
+
+    // Option B: 9-month is a Double Pi
+    let altCollected = {
+        gwang: [...collected.gwang],
+        tti: [...collected.tti],
+        yul: collected.yul.filter(c => c.id !== kiku.id),
+        pi: [...collected.pi, kiku]
+    };
+    let scoreB = getBaseScore(altCollected);
+
+    return scoreA.total >= scoreB.total ? scoreA : scoreB;
 }
 
 // Fisher-Yates Shuffle Algorithm
@@ -410,6 +423,10 @@ function createCardElement(card, isHidden = false, onClickCallback = null) {
 
 // Render the arrays to DOM
 function renderBoard() {
+    // Always ensure hands are sorted by month for consistent UI
+    playerHand.sort((a, b) => a.month - b.month);
+    comHand.sort((a, b) => a.month - b.month);
+
     playerHandEl.innerHTML = '';
     playerHand.forEach((card, index) => {
         let clickable = null;
@@ -604,6 +621,7 @@ async function dealCards() {
     floorCards.sort((a, b) => a.month - b.month);
 
     await handleFloorBonusCards();
+
 
     if (checkChongtong()) {
         isDealing = false;
@@ -803,10 +821,15 @@ function animateHandToCollection(cardObj, owner, callback) {
         flyingCard.style.opacity = '0.3';
     });
 
-    flyingCard.addEventListener('transitionend', () => {
+    let finished = false;
+    const cleanup = () => {
+        if (finished) return;
+        finished = true;
         flyingCard.remove();
         if (callback) callback();
-    }, { once: true });
+    };
+    flyingCard.addEventListener('transitionend', cleanup, { once: true });
+    setTimeout(cleanup, 1200);
 }
 
 function animateDeckToHand(cardObj, owner, callback) {
@@ -818,33 +841,35 @@ function animateDeckToHand(cardObj, owner, callback) {
     const targetRect = targetEl.getBoundingClientRect();
 
     const flyingCard = document.createElement('img');
-    // Hide computer's card back
     flyingCard.src = (owner === 'player') ? cardObj.imgSrc : 'real_cards/back.jpg';
     flyingCard.className = 'card-img';
     flyingCard.style.position = 'fixed';
     flyingCard.style.left = `${deckRect.left}px`;
     flyingCard.style.top = `${deckRect.top}px`;
     flyingCard.style.zIndex = '9999';
-    // Slowly move to hand as requested (1.2s)
     flyingCard.style.transition = 'all 1.2s ease-in-out';
     flyingCard.style.margin = '0';
     document.body.appendChild(flyingCard);
 
     requestAnimationFrame(() => {
-        // Calculate the end of the hand visually
         let xOffset = 0;
         if (targetEl.children && targetEl.children.length > 0) {
             const lastChildRect = targetEl.lastElementChild.getBoundingClientRect();
-            xOffset = (lastChildRect.left - targetRect.left) + 40; // Approx card width
+            xOffset = (lastChildRect.left - targetRect.left) + 40;
         }
         flyingCard.style.left = `${targetRect.left + xOffset}px`;
         flyingCard.style.top = `${targetRect.top}px`;
     });
 
-    flyingCard.addEventListener('transitionend', () => {
+    let finished = false;
+    const cleanup = () => {
+        if (finished) return;
+        finished = true;
         flyingCard.remove();
         if (callback) callback();
-    }, { once: true });
+    };
+    flyingCard.addEventListener('transitionend', cleanup, { once: true });
+    setTimeout(cleanup, 1600);
 }
 
 function animateDeckToCollection(cardObj, owner, callback) {
@@ -874,10 +899,15 @@ function animateDeckToCollection(cardObj, owner, callback) {
         flyingCard.style.opacity = '0.3';
     });
 
-    flyingCard.addEventListener('transitionend', () => {
+    let finished = false;
+    const cleanup = () => {
+        if (finished) return;
+        finished = true;
         flyingCard.remove();
         if (callback) callback();
-    }, { once: true });
+    };
+    flyingCard.addEventListener('transitionend', cleanup, { once: true });
+    setTimeout(cleanup, 1200);
 }
 
 async function handlePlayBonusCard(card, owner) {
@@ -938,7 +968,6 @@ async function handlePlayBonusCard(card, owner) {
         }
     }
 
-    await evaluateAnimalRules(owner);
     isDealing = false;
     renderBoard();
 
@@ -1282,34 +1311,29 @@ function showEventAlertWithConfirm(message, owner) {
     });
 }
 
-async function evaluateAnimalRules(turnOwner) {
-    const isPlayer = turnOwner === 'player';
+function countCurrentAnimals(owner) {
+    const isPlayer = owner === 'player';
     const collection = isPlayer ? playerCollected : comCollected;
-    const oppCollection = isPlayer ? comCollected : playerCollected;
-
-    // Count current animals
-    let currentAnimals = 0;
-    // Iterate over all collections to cleanly find animals by image name
+    let count = 0;
     ['gwang', 'yul', 'tti', 'pi'].forEach(type => {
         collection[type].forEach(card => {
             const fileName = card.imgSrc.split('/').pop();
-            // 7월 열끝 is already accurately mapped to 3 in animalCardCounts
             if (animalCardCounts[fileName]) {
-                currentAnimals += animalCardCounts[fileName];
+                count += animalCardCounts[fileName];
             }
         });
     });
+    return count;
+}
+
+async function evaluateAnimalRules(turnOwner) {
+    const isPlayer = turnOwner === 'player';
+
+    // Count current animals
+    const currentAnimals = countCurrentAnimals(turnOwner);
 
     // Count opponent's current animals
-    let oppAnimals = 0;
-    ['gwang', 'yul', 'tti', 'pi'].forEach(type => {
-        oppCollection[type].forEach(card => {
-            const fileName = card.imgSrc.split('/').pop();
-            if (animalCardCounts[fileName]) {
-                oppAnimals += animalCardCounts[fileName];
-            }
-        });
-    });
+    const oppAnimals = countCurrentAnimals(isPlayer ? 'com' : 'player');
 
     let prevAnimals = isPlayer ? window.playerAnimals : window.comAnimals;
 
@@ -1327,7 +1351,7 @@ async function evaluateAnimalRules(turnOwner) {
         }
 
         const myMultiplier = isPlayer ? window.playerMultiplier : window.comMultiplier;
-        let finalAmount = (isAnimalBak ? baseAmount * 2 : baseAmount) * myMultiplier;
+        let finalAmount = (isAnimalBak ? baseAmount * 2 : baseAmount);
 
         // Convert to rough Korean word format
         let amountStr = "";
@@ -1354,7 +1378,6 @@ async function evaluateAnimalRules(turnOwner) {
 
         let suffix = "";
         let reasons = [];
-        if (myMultiplier > 1) reasons.push(`배수x${myMultiplier}`);
         if (isAnimalBak) reasons.push("동물박");
         if (reasons.length > 0) suffix = ` (${reasons.join(", ")})`;
 
@@ -1393,10 +1416,15 @@ function resolveCaptures(cards, owner) {
     let targetCollection = owner === 'player' ? playerCollected : comCollected;
 
     cards.forEach(card => {
-        if (card.type === 'gwang') targetCollection.gwang.push(card);
-        else if (card.type === 'yul') targetCollection.yul.push(card);
-        else if (card.type === 'tti') targetCollection.tti.push(card);
-        else targetCollection.pi.push(card);
+        if (card.type === 'gwang') {
+            targetCollection.gwang.push(card);
+        } else if (card.type === 'yul') {
+            targetCollection.yul.push(card);
+        } else if (card.type === 'tti') {
+            targetCollection.tti.push(card);
+        } else {
+            targetCollection.pi.push(card);
+        }
     });
 }
 
@@ -1860,7 +1888,9 @@ function endGame(explicitWinner = null) {
                 gwang: winnerScoreInfo.gwang,
                 gwangCount: winnerScoreInfo.gwangCount,
                 yul: winnerScoreInfo.yul,
+                yulCount: winnerScoreInfo.yulCount || 0,
                 tti: winnerScoreInfo.tti,
+                ttiCount: winnerScoreInfo.ttiCount || 0,
                 pi: winnerScoreInfo.pi,
                 piCount: winnerScoreInfo.piCount,
                 godori: winnerScoreInfo.godori,
@@ -1902,7 +1932,7 @@ function showResultModal(data) {
 
         content = `
             <div class="result-main">
-                <span class="result-winner">${data.winner} 승리!</span>
+                <span class="result-winner">${data.title || data.winner + ' 승리!'}</span>
                 <span style="font-size: 1.8rem; color: #fff;">최종 ${data.finalScore}점</span>
                 <div style="color: #00d2ff; font-size: 0.9rem; margin-top: 5px;">${data.bakText}</div>
             </div>
@@ -1911,9 +1941,9 @@ function showResultModal(data) {
             
             <h4>상세 점수 내역</h4>
             <div class="result-detail-item"><span class="result-label">광</span><span class="result-value">${data.gwang}점 (${data.gwangCount}장)</span></div>
-            <div class="result-detail-item"><span class="result-label">열끝</span><span class="result-value">${data.yul}점</span></div>
+            <div class="result-detail-item"><span class="result-label">열끝</span><span class="result-value">${data.yul}점 (${data.yulCount}장)</span></div>
             ${godoriHtml}
-            <div class="result-detail-item"><span class="result-label">띠</span><span class="result-value">${data.tti}점</span></div>
+            <div class="result-detail-item"><span class="result-label">띠</span><span class="result-value">${data.tti}점 (${data.ttiCount}장)</span></div>
             ${danHtml}
             <div class="result-detail-item"><span class="result-label">피</span><span class="result-value">${data.pi}점 (${data.piCount}장)</span></div>
             
