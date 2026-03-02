@@ -9,7 +9,10 @@ const animalCardCounts = {
     '10_yul.jpg': 1,
     '11_gwang.jpg': 1,
     '12_gwang.jpg': 2,
-    '12_yul.jpg': 1
+    '12_yul.jpg': 1,
+    'double_pi_1.jpg': 2,
+    'double_pi_2.jpg': 2,
+    'double_pi_3.jpg': 2
 };
 
 // Define all 48 cards
@@ -61,15 +64,25 @@ const hwatuDeckSpecs = [
     { id: 45, month: 12, type: "gwang", name: "12월 비광" },
     { id: 46, month: 12, type: "kasu", name: "12월 쌍피" },
     { id: 47, month: 12, type: "tti", name: "12월 비띠" },
-    { id: 48, month: 12, type: "yul", name: "12월 열끝(비도리)" }
+    { id: 48, month: 12, type: "yul", name: "12월 열끝(비도리)" },
+    { id: 49, month: 0, type: "bonus", name: "보너스 쌍피1" },
+    { id: 50, month: 0, type: "bonus", name: "보너스 쌍피2" },
+    { id: 51, month: 0, type: "bonus", name: "보너스 쌍피3" }
 ];
 
 // Add image paths to specs
 const fullDeck = hwatuDeckSpecs.map(card => {
     let typeName = card.type;
+    let imgSrc = "";
+    if (typeName === "bonus") {
+        const bonusIdx = card.id - 48; // 49 -> 1, 50 -> 2, 51 -> 3
+        imgSrc = `real_cards/double_pi_${bonusIdx}.jpg`;
+    } else {
+        imgSrc = `real_cards/${String(card.month).padStart(2, '0')}_${typeName}.jpg`;
+    }
     return {
         ...card,
-        imgSrc: `real_cards/${String(card.month).padStart(2, '0')}_${typeName}.jpg`
+        imgSrc: imgSrc
     };
 });
 
@@ -200,7 +213,12 @@ function updateScoreUI() {
     renderMiniCards(document.querySelector('#player-area .yul-group'), playerCollected.yul);
     renderMiniCards(document.querySelector('#player-area .tti-group'), playerCollected.tti);
     renderMiniCards(document.querySelector('#player-area .pi-group'), playerCollected.pi);
-    playerScoreEl.innerText = pBreakdown.total;
+
+    let pScoreText = pBreakdown.total;
+    if (pBreakdown.multiplierObj > 1) {
+        pScoreText += ` (x${pBreakdown.multiplierObj})`;
+    }
+    playerScoreEl.innerText = pScoreText;
     updateJokboBadges('player', pBreakdown);
 
     // Computer Score Update
@@ -209,7 +227,12 @@ function updateScoreUI() {
     renderMiniCards(document.querySelector('#computer-area .yul-group'), comCollected.yul);
     renderMiniCards(document.querySelector('#computer-area .tti-group'), comCollected.tti);
     renderMiniCards(document.querySelector('#computer-area .pi-group'), comCollected.pi);
-    comScoreEl.innerText = cBreakdown.total;
+
+    let cScoreText = cBreakdown.total;
+    if (cBreakdown.multiplierObj > 1) {
+        cScoreText += ` (x${cBreakdown.multiplierObj})`;
+    }
+    comScoreEl.innerText = cScoreText;
     updateJokboBadges('com', cBreakdown);
 }
 
@@ -318,21 +341,34 @@ function calculateScore(collected, ownerType) {
     let piCount = 0;
     collected.pi.forEach(c => {
         if (c.type === 'pi_1' || c.type === 'pi_2') piCount += 1;
-        if (c.type === 'pi_3' || c.type === 'kasu') piCount += 2; // 쌍피
+        if (c.type === 'pi_3' || c.type === 'kasu' || c.type === 'bonus') piCount += 2; // 쌍피 및 보너스쌍피
     });
     if (piCount >= 10) breakdown.pi = piCount - 9;
 
     breakdown.piCount = piCount;
     breakdown.gwangCount = gwangCount;
 
-    // Board Score Total
-    breakdown.total = breakdown.gwang + breakdown.yul + breakdown.tti + breakdown.pi;
+    // Go Points (1-Go: +1, 2-Go: +2, 3-Go+: x2, x4, ...)
+    const ownerGoCount = (ownerType === 'player') ? window.playerGoCount : window.comGoCount;
+    let goPoints = 0;
+    if (ownerGoCount === 1) goPoints = 1;
+    else if (ownerGoCount >= 2) goPoints = 2;
+    breakdown.goPoints = goPoints;
 
-    // Apply Shake/Bomb multiplier (These are per-player globals)
-    let mult = (ownerType === 'player') ? window.playerMultiplier : window.comMultiplier;
-    if (mult > 1) {
-        breakdown.multiplierObj *= mult;
-        breakdown.total *= mult;
+    // Board Score Total (Sum base points including Go flat bonuses)
+    breakdown.total = breakdown.gwang + breakdown.yul + breakdown.tti + breakdown.pi + goPoints;
+
+    // Multipliers (Shake, Bomb, and 3+ Go)
+    let totalMult = (ownerType === 'player') ? window.playerMultiplier : window.comMultiplier;
+
+    // Applying High Go Multiplier (3+ Go)
+    if (ownerGoCount >= 3) {
+        totalMult *= Math.pow(2, ownerGoCount - 2);
+    }
+
+    if (totalMult > 1) {
+        breakdown.multiplierObj = totalMult;
+        breakdown.total *= totalMult;
     }
 
     return breakdown;
@@ -376,11 +412,15 @@ function createCardElement(card, isHidden = false, onClickCallback = null) {
 function renderBoard() {
     playerHandEl.innerHTML = '';
     playerHand.forEach((card, index) => {
-        const clickable = (currentTurn === 'player' && !isDealing) ? handlePlayerPlayCard : null;
+        let clickable = null;
+        if (currentTurn === 'player' && !isDealing) {
+            clickable = (card.type === 'bonus') ? (c => handlePlayBonusCard(c, 'player')) : handlePlayerPlayCard;
+        }
         const cardEl = createCardElement(card, false, clickable);
         // Add dynamic z-index so overlapping works cleanly left to right
         cardEl.style.zIndex = index;
         if (currentTurn === 'player') cardEl.classList.add('playable');
+        if (card.type === 'bonus' && currentTurn === 'player') cardEl.classList.add('bonus-card');
         playerHandEl.appendChild(cardEl);
     });
 
@@ -563,6 +603,8 @@ async function dealCards() {
     // Group floor cards by month
     floorCards.sort((a, b) => a.month - b.month);
 
+    await handleFloorBonusCards();
+
     if (checkChongtong()) {
         isDealing = false;
         renderBoard();
@@ -577,6 +619,38 @@ async function dealCards() {
     // If Com is dealer, trigger com's first play after a short delay
     if (currentTurn === 'com') {
         setTimeout(playComTurn, 1000);
+    }
+}
+
+async function handleFloorBonusCards() {
+    let bonusOnFloor = floorCards.filter(c => c.type === 'bonus');
+    if (bonusOnFloor.length === 0) return;
+
+    // The dealer (lastWinner) gets the floor bonus cards
+    const dealer = lastWinner;
+    const targetCollection = dealer === 'player' ? playerCollected : comCollected;
+
+    for (let card of bonusOnFloor) {
+        // Move to collection
+        targetCollection.pi.push(card);
+        // Remove from floor
+        floorCards = floorCards.filter(c => c.id !== card.id);
+
+        // Replace from deck
+        if (deck.length > 0) {
+            let replacement = deck.shift();
+            floorCards.push(replacement);
+        }
+
+        showEventAlert('바닥 보너스 획득!', dealer);
+        if (window.playCardSound) window.playCardSound();
+        renderBoard();
+        await new Promise(r => setTimeout(r, 600));
+    }
+
+    // Check if new cards are also bonus cards (recursive-ish check)
+    if (floorCards.some(c => c.type === 'bonus')) {
+        await handleFloorBonusCards();
     }
 }
 
@@ -698,6 +772,185 @@ function handlePlayerPlayCard(playedCard) {
     });
 }
 
+function animateHandToCollection(cardObj, owner, callback) {
+    const handEl = owner === 'player' ? playerHandEl : comHandEl;
+    const cardEl = Array.from(handEl.children).find(el => el.dataset.id == cardObj.id);
+    if (!cardEl) {
+        if (callback) callback();
+        return;
+    }
+
+    const targetAreaSelector = owner === 'player' ? '#player-area .pi-group' : '#computer-area .pi-group';
+    const targetEl = document.querySelector(targetAreaSelector);
+    const targetRect = targetEl.getBoundingClientRect();
+    const startRect = cardEl.getBoundingClientRect();
+
+    const flyingCard = cardEl.cloneNode(true);
+    flyingCard.style.position = 'fixed';
+    flyingCard.style.left = `${startRect.left}px`;
+    flyingCard.style.top = `${startRect.top}px`;
+    flyingCard.style.zIndex = '9999';
+    flyingCard.style.transition = 'all 0.8s cubic-bezier(0.2, 0.8, 0.2, 1)';
+    flyingCard.style.margin = '0';
+    document.body.appendChild(flyingCard);
+
+    cardEl.style.visibility = 'hidden';
+
+    requestAnimationFrame(() => {
+        flyingCard.style.left = `${targetRect.left + 20}px`;
+        flyingCard.style.top = `${targetRect.top - 10}px`;
+        flyingCard.style.transform = 'scale(0.5)';
+        flyingCard.style.opacity = '0.3';
+    });
+
+    flyingCard.addEventListener('transitionend', () => {
+        flyingCard.remove();
+        if (callback) callback();
+    }, { once: true });
+}
+
+function animateDeckToHand(cardObj, owner, callback) {
+    const deckEl = document.getElementById('deck');
+    if (!deckEl) { callback(); return; }
+    const deckRect = deckEl.getBoundingClientRect();
+
+    const targetEl = owner === 'player' ? playerHandEl : comHandEl;
+    const targetRect = targetEl.getBoundingClientRect();
+
+    const flyingCard = document.createElement('img');
+    // Hide computer's card back
+    flyingCard.src = (owner === 'player') ? cardObj.imgSrc : 'real_cards/back.jpg';
+    flyingCard.className = 'card-img';
+    flyingCard.style.position = 'fixed';
+    flyingCard.style.left = `${deckRect.left}px`;
+    flyingCard.style.top = `${deckRect.top}px`;
+    flyingCard.style.zIndex = '9999';
+    // Slowly move to hand as requested (1.2s)
+    flyingCard.style.transition = 'all 1.2s ease-in-out';
+    flyingCard.style.margin = '0';
+    document.body.appendChild(flyingCard);
+
+    requestAnimationFrame(() => {
+        // Calculate the end of the hand visually
+        let xOffset = 0;
+        if (targetEl.children && targetEl.children.length > 0) {
+            const lastChildRect = targetEl.lastElementChild.getBoundingClientRect();
+            xOffset = (lastChildRect.left - targetRect.left) + 40; // Approx card width
+        }
+        flyingCard.style.left = `${targetRect.left + xOffset}px`;
+        flyingCard.style.top = `${targetRect.top}px`;
+    });
+
+    flyingCard.addEventListener('transitionend', () => {
+        flyingCard.remove();
+        if (callback) callback();
+    }, { once: true });
+}
+
+function animateDeckToCollection(cardObj, owner, callback) {
+    const deckEl = document.getElementById('deck');
+    if (!deckEl) { callback(); return; }
+    const deckRect = deckEl.getBoundingClientRect();
+
+    const targetAreaSelector = owner === 'player' ? '#player-area .pi-group' : '#computer-area .pi-group';
+    const targetEl = document.querySelector(targetAreaSelector);
+    const targetRect = targetEl.getBoundingClientRect();
+
+    const flyingCard = document.createElement('img');
+    flyingCard.src = cardObj.imgSrc;
+    flyingCard.className = 'card-img';
+    flyingCard.style.position = 'fixed';
+    flyingCard.style.left = `${deckRect.left}px`;
+    flyingCard.style.top = `${deckRect.top}px`;
+    flyingCard.style.zIndex = '9999';
+    flyingCard.style.transition = 'all 0.8s cubic-bezier(0.2, 0.8, 0.2, 1)';
+    flyingCard.style.margin = '0';
+    document.body.appendChild(flyingCard);
+
+    requestAnimationFrame(() => {
+        flyingCard.style.left = `${targetRect.left + 20}px`;
+        flyingCard.style.top = `${targetRect.top - 10}px`;
+        flyingCard.style.transform = 'scale(0.5)';
+        flyingCard.style.opacity = '0.3';
+    });
+
+    flyingCard.addEventListener('transitionend', () => {
+        flyingCard.remove();
+        if (callback) callback();
+    }, { once: true });
+}
+
+async function handlePlayBonusCard(card, owner) {
+    if (currentTurn !== owner || isDealing || window.waitingForGiri) return;
+
+    isDealing = true;
+
+    // 1. Animate from hand to collection
+    await new Promise(resolve => {
+        animateHandToCollection(card, owner, () => {
+            // Remove from hand model
+            if (owner === 'player') {
+                playerHand = playerHand.filter(c => c.id !== card.id);
+            } else {
+                comHand = comHand.filter(c => c.id !== card.id);
+            }
+            // Move to collection model
+            const collection = owner === 'player' ? playerCollected : comCollected;
+            collection.pi.push(card);
+            if (window.playCardSound) window.playCardSound();
+            renderBoard();
+            resolve();
+        });
+    });
+
+    // 2. Loop to draw replacement from deck to hand
+    // If replacement is bonus, it goes to collection and we flip another for hand
+    while (deck.length > 0) {
+        let replacement = deck.shift();
+        if (replacement.type === 'bonus') {
+            await new Promise(resolve => {
+                animateDeckToCollection(replacement, owner, () => {
+                    const collection = owner === 'player' ? playerCollected : comCollected;
+                    collection.pi.push(replacement);
+                    if (window.playCardSound) window.playCardSound();
+                    renderBoard();
+                    resolve();
+                });
+            });
+            // continues to next iteration to get a non-bonus card for the hand
+        } else {
+            // Animate moving to hand slowly
+            await new Promise(resolve => {
+                animateDeckToHand(replacement, owner, () => {
+                    if (owner === 'player') {
+                        playerHand.push(replacement);
+                        playerHand.sort((a, b) => a.month - b.month);
+                    } else {
+                        comHand.push(replacement);
+                        comHand.sort((a, b) => a.month - b.month);
+                    }
+                    if (window.playCardSound) window.playCardSound();
+                    renderBoard();
+                    resolve();
+                });
+            });
+            break; // Finished getting a normal card for hand
+        }
+    }
+
+    await evaluateAnimalRules(owner);
+    isDealing = false;
+    renderBoard();
+
+    // TURN CONTINUES
+    if (owner === 'com') {
+        setTimeout(playComAiCard, 600);
+    } else {
+        // Re-attach listeners to the updated hand just in case
+        renderBoard(); // Forces recreation of elements with correct bindings
+    }
+}
+
 // Process a card played from hand
 function processPlayPhase(playedCard, turnOwner) {
     // 1. Check match with floor
@@ -793,11 +1046,18 @@ function animateGiriCard(turnOwner) {
     flyingCard.style.top = `${targetY}px`;
     flyingCard.style.transform = `scale(1.1) rotate(${randomRotation}deg)`;
 
-    flyingCard.addEventListener('transitionend', () => {
+    let transitionFinished = false;
+    const cleanup = () => {
+        if (transitionFinished) return;
+        transitionFinished = true;
         flyingCard.remove();
         if (window.playCardSound) window.playCardSound();
         processGiriPhase(turnOwner);
-    }, { once: true });
+    };
+
+    flyingCard.addEventListener('transitionend', cleanup, { once: true });
+    // Safety timeout: transition is 0.6s
+    setTimeout(cleanup, 1000);
 }
 
 function processGiriPhase(turnOwner) {
@@ -916,6 +1176,16 @@ function processGiriPhase(turnOwner) {
         if (!giriCard) {
             // No giri card, just finish with whatever the hand card captured
             finishGiriPhase();
+        } else if (giriCard.type === 'bonus') {
+            // New Rule: If Giri card is a bonus card, collect it immediately and flip again
+            resolveCaptures([giriCard], turnOwner); // Resolve immediately so it's not lost
+            if (window.playCardSound) window.playCardSound();
+
+            renderBoard();
+            setTimeout(() => {
+                animateGiriCard(turnOwner);
+            }, 600);
+            return; // EXIT - the recursive animateGiriCard -> processGiriPhase will handle the rest
         } else if (matchedFloorCards.length === 0) {
             floorCards.push(giriCard);
             finishGiriPhase();
@@ -1173,7 +1443,10 @@ function animateCardCapture(capturedCards, turnOwner, callback) {
         flyingCard.style.transform = 'scale(0.5) rotate(0deg)';
         flyingCard.style.opacity = '0.3';
 
-        flyingCard.addEventListener('transitionend', () => {
+        let transitionFinished = false;
+        const cleanup = () => {
+            if (transitionFinished) return;
+            transitionFinished = true;
             flyingCard.remove();
 
             // Only play the sound once for the very first card landing
@@ -1188,7 +1461,11 @@ function animateCardCapture(capturedCards, turnOwner, callback) {
                 renderBoard(); // Final update to update text counters and dom
                 callback();
             }
-        }, { once: true });
+        };
+
+        flyingCard.addEventListener('transitionend', cleanup, { once: true });
+        // Safety timeout: transition is 0.5s + staggered delay
+        setTimeout(cleanup, 1000 + (capturedCards.length * 100));
     });
 }
 
@@ -1369,7 +1646,12 @@ function processBombPhase(handCards, floorCard, turnOwner) {
 }
 
 function playComTurn() {
-    if (comHand.length === 0) return;
+    if (comHand.length === 0 || currentTurn !== 'com') return;
+
+    if (isDealing) {
+        setTimeout(playComTurn, 500);
+        return;
+    }
 
     if (window.comEmptyTurns > 0) {
         // AI Choice: Skip or Play?
@@ -1418,6 +1700,13 @@ function playComTurn() {
 function playComAiCard() {
 
     // Dumb AI: Try to find a card that matches the floor
+    // Check for bonus cards first
+    let bonusCard = comHand.find(c => c.type === 'bonus');
+    if (bonusCard) {
+        handlePlayBonusCard(bonusCard, 'com');
+        return; // handlePlayBonusCard will call playComAiCard again
+    }
+
     let cardToPlay = null;
     let isBomb = false;
     let matchingHandCards = [];
