@@ -239,16 +239,17 @@ function updateJokboBadges(owner, breakdown) {
     items.forEach(item => {
         const badgeEl = container.querySelector(`.jokbo-badge.${item.key}`);
         if (badgeEl) {
+            console.log(`[JOKBO DEBUG] ${owner} - ${item.key}: count = ${item.count}, blocked = ${item.blocked}`);
             if (item.count === 3) {
                 badgeEl.classList.remove('emergency');
                 badgeEl.classList.add('active');
                 badgeEl.innerText = item.label;
-                badgeEl.style.display = 'inline-block';
+                badgeEl.style.cssText = 'display: inline-block !important;';
             } else if (item.count === 2 && !item.blocked) {
                 badgeEl.classList.remove('active');
                 badgeEl.classList.add('emergency');
                 badgeEl.innerText = `${item.label} 비상!`;
-                badgeEl.style.display = 'inline-block';
+                badgeEl.style.cssText = 'display: inline-block !important; background-color: #ff0000; padding: 2px 8px; border-radius: 4px; box-shadow: 0 0 10px red; margin-bottom: 2px;';
             } else {
                 badgeEl.classList.remove('active', 'emergency');
                 badgeEl.style.display = 'none';
@@ -942,8 +943,7 @@ function processGiriPhase(turnOwner) {
         }
     }
 }
-function processAnimalMoney(turnOwner, oppHasZero) {
-    let amount = oppHasZero ? 2000 : 1000;
+function processAnimalMoney(turnOwner, amount) {
     if (turnOwner === 'player') {
         if (comMoney < amount) amount = comMoney;
         playerMoney += amount;
@@ -1045,20 +1045,19 @@ async function evaluateAnimalRules(turnOwner) {
 
     if (currentAnimals > prevAnimals && currentAnimals >= 3) {
         // Gain money
-        let chargeableAnimals = 0;
+        const isAnimalBak = (oppAnimals === 0);
+
+        let baseAmount = 0;
         if (prevAnimals < 3) {
-            chargeableAnimals = currentAnimals - 2;
+            // 최초 3마리 도달 시 (2마리 공제)
+            baseAmount = (currentAnimals - 2) * 1000;
         } else {
-            chargeableAnimals = currentAnimals - prevAnimals;
+            // 이미 3마리 이상인 상태에서의 추가 획득 (증분 계산)
+            baseAmount = (currentAnimals - prevAnimals) * 1000;
         }
 
-        const baseAmount = chargeableAnimals * 1000;
-        const isAnimalBak = (oppAnimals === 0);
-        let finalAmount = isAnimalBak ? baseAmount * 2 : baseAmount;
-
-        // Apply globals (shake/bomb)
-        const multiplier = isPlayer ? window.playerMultiplier : window.comMultiplier;
-        finalAmount *= multiplier;
+        const myMultiplier = isPlayer ? window.playerMultiplier : window.comMultiplier;
+        let finalAmount = (isAnimalBak ? baseAmount * 2 : baseAmount) * myMultiplier;
 
         // Convert to rough Korean word format
         let amountStr = "";
@@ -1084,16 +1083,14 @@ async function evaluateAnimalRules(turnOwner) {
         }
 
         let suffix = "";
-        if (multiplier > 1 || isAnimalBak) {
-            let reasons = [];
-            if (multiplier > 1) reasons.push(`배수x${multiplier}`);
-            if (isAnimalBak) reasons.push("동물박");
-            suffix = ` (${reasons.join(", ")})`;
-        }
+        let reasons = [];
+        if (myMultiplier > 1) reasons.push(`배수x${myMultiplier}`);
+        if (isAnimalBak) reasons.push("동물박");
+        if (reasons.length > 0) suffix = ` (${reasons.join(", ")})`;
 
         const msg = `앗싸! ${amountStr}${suffix}\n(현재 동물이 ${currentAnimals}마리)`;
 
-        processAnimalMoney(turnOwner, finalAmount, false); // pass finalAmount directly, skip double-baking in the function
+        processAnimalMoney(turnOwner, finalAmount);
         await showEventAlertWithConfirm(msg, turnOwner);
     }
 
@@ -1313,7 +1310,7 @@ function handleEmptyTurn(turnOwner) {
         window.comEmptyTurns--;
     }
 
-    showEventAlert('공턴', turnOwner);
+    // showEventAlert('공턴', turnOwner); // Removed per user request
 
     // 빈 턴일 경우 패를 내지 않고 대기 상태로 진입 (기리패 수동 클릭)
     window.turnContext.playedCardMatchedLength = -1; // 따닥 방지

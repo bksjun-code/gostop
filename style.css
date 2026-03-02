@@ -526,7 +526,8 @@ body {
 @media (max-width: 768px) {
     body {
         align-items: flex-start;
-        overflow-y: auto; /* allow scrolling if needed */
+        overflow-y: auto;
+        /* allow scrolling if needed */
         background-color: #111;
     }
 
@@ -546,13 +547,15 @@ body {
         gap: 10px;
     }
 
-    #computer-area, #player-area {
+    #computer-area,
+    #player-area {
         width: 100%;
         margin-bottom: 5px;
     }
 
     #computer-area {
-        flex-direction: column-reverse; /* info panel at top, then cards */
+        flex-direction: column;
+        /* info panel at top, then cards */
     }
 
     /* Info panels smaller */
@@ -573,7 +576,8 @@ body {
         margin-bottom: 5px;
     }
 
-    .info-panel .score, .info-panel .money {
+    .info-panel .score,
+    .info-panel .money {
         font-size: 0.85rem;
         margin-bottom: 2px;
     }
@@ -590,7 +594,8 @@ body {
     .hand-cards {
         width: 100%;
         justify-content: center;
-        gap: -35px; /* overlap more */
+        gap: -35px;
+        /* overlap more */
         min-height: 80px;
     }
 
@@ -604,7 +609,8 @@ body {
     }
 
     .card-group {
-        width: 48%; /* 2x2 grid */
+        width: 48%;
+        /* 2x2 grid */
         min-height: 40px;
         padding: 5px;
     }
@@ -662,7 +668,8 @@ body {
         font-size: 1.2rem !important;
     }
 
-    #shake-cards .card-img, #bomb-cards .card-img {
+    #shake-cards .card-img,
+    #bomb-cards .card-img {
         width: 50px !important;
         height: 80px !important;
     }
