@@ -8,8 +8,8 @@ const animalCardCounts = {
     '07_yul.jpg': 3,
     '08_yul.jpg': 3,
     '10_yul.jpg': 1,
-    '11_gwang.jpg': 2,
-    '12_gwang.jpg': 1,
+    '11_gwang.jpg': 1,
+    '12_gwang.jpg': 2,
     '12_yul.jpg': 1,
     'double_pi_1.jpg': 2,
     'double_pi_2.jpg': 2,
@@ -59,9 +59,9 @@ const hwatuDeckSpecs = [
     { id: 39, month: 10, type: "tti", name: "10월 청단" },
     { id: 40, month: 10, type: "yul", name: "10월 열끝" },
     { id: 41, month: 11, type: "gwang", name: "11월 광" },
-    { id: 42, month: 11, type: "pi_1", name: "11월 쌍피1" },
-    { id: 43, month: 11, type: "pi_2", name: "11월 쌍피2" },
-    { id: 44, month: 11, type: "pi_3", name: "11월 피" },
+    { id: 42, month: 11, type: "kasu", name: "11월 쌍피" },
+    { id: 43, month: 11, type: "pi_1", name: "11월 피1" },
+    { id: 44, month: 11, type: "pi_2", name: "11월 피2" },
     { id: 45, month: 12, type: "gwang", name: "12월 비광" },
     { id: 46, month: 12, type: "kasu", name: "12월 쌍피" },
     { id: 47, month: 12, type: "tti", name: "12월 비띠" },
@@ -156,6 +156,13 @@ function initGame() {
     window.playerShook = false;
     window.comShook = false;
     window.waitingForGiri = false;
+
+    window.playerAnimalBonusPaid = 0;
+    window.comAnimalBonusPaid = 0;
+
+    // Track which months were shaken to prevent later bombing in the same round
+    window.playerShakenMonths = [];
+    window.comShakenMonths = [];
 
     // Turn context variables to detect events like ttaddak (따닥)
     window.turnContext = {
@@ -342,9 +349,12 @@ function calculateScore(collected, ownerType) {
         // Pi (피)
         let piCount = 0;
         currentCollected.pi.forEach(c => {
-            if (c.type === 'pi_1' || c.type === 'pi_2') piCount += 1;
-            // 9월 열끝이 피로 분류되었거나, 다른 쌍피/보너스인 경우 2점
-            if (c.type === 'pi_3' || c.type === 'kasu' || c.type === 'bonus' || (c.month === 9 && c.type === 'yul')) piCount += 2;
+            // kasu(쌍피), bonus(보너스), 9월 국진(열끝)은 2장으로 계산
+            if (c.type === 'kasu' || c.type === 'bonus' || (c.month === 9 && c.type === 'yul')) {
+                piCount += 2;
+            } else {
+                piCount += 1;
+            }
         });
         if (piCount >= 10) breakdown.pi = piCount - 9;
         breakdown.piCount = piCount;
@@ -356,12 +366,20 @@ function calculateScore(collected, ownerType) {
         breakdown.goPoints = goPoints;
 
         breakdown.total = breakdown.gwang + breakdown.yul + breakdown.tti + breakdown.pi + goPoints;
+        const baseTotal = breakdown.total;
 
-        // Multipliers
+        // Multipliers: Only apply if base score is 3 or more
         let totalMult = (ownerType === 'player') ? window.playerMultiplier : window.comMultiplier;
         if (ownerGoCount >= 3) totalMult *= Math.pow(2, ownerGoCount - 2);
+
         breakdown.multiplierObj = totalMult;
-        breakdown.total *= totalMult;
+
+        if (baseTotal >= 3) {
+            breakdown.total = baseTotal * totalMult;
+        } else {
+            // Raw score is below 3, don't multiply total (but keep multiplier for display)
+            breakdown.total = baseTotal;
+        }
 
         return breakdown;
     }
@@ -518,12 +536,14 @@ function executeShake(owner, month) {
     if (owner === 'player') {
         window.playerShook = true;
         window.playerMultiplier *= 2;
+        window.playerShakenMonths.push(month);
         document.getElementById('btn-shake').style.display = 'none';
         let badge = document.getElementById('player-shake-badge');
         if (badge) badge.style.display = 'inline-block';
     } else {
         window.comShook = true;
         window.comMultiplier *= 2;
+        window.comShakenMonths.push(month);
         let badge = document.getElementById('com-shake-badge');
         if (badge) badge.style.display = 'inline-block';
     }
@@ -660,7 +680,7 @@ async function handleFloorBonusCards() {
             floorCards.push(replacement);
         }
 
-        showEventAlert('바닥 보너스 획득!', dealer);
+        showEventAlert('아싸! 뽀너스', dealer);
         if (window.playCardSound) window.playCardSound();
         renderBoard();
         await new Promise(r => setTimeout(r, 600));
@@ -730,10 +750,10 @@ function processGameEndWager(winnerStr, score) {
 
     let text = `[머니 정산] ${winnings.toLocaleString()}원 획득!`;
     if (comMoney <= 0) {
-        text += `\n컴퓨터 파산! 당신의 승리입니다. 게임이 완전히 종료됩니다.`;
+        text += `\n컴퓨터 파산! 당신의 승리입니다.`;
         btnDeal.style.display = 'none'; // Lock out the game
     } else if (playerMoney <= 0) {
-        text += `\n사용자 파산! 컴퓨터 플렉스! 접속을 종료합니다.`;
+        text += `\n사용자 파산! 컴퓨터의 승리입니다.`;
         btnDeal.style.display = 'none'; // Lock out the game
     }
 
@@ -776,8 +796,11 @@ function handlePlayerPlayCard(playedCard) {
     isDealing = true; // Prevent player from playing another card during animation
 
     if (matchingHandCards.length === 3 && matchingFloorCards.length === 1) {
-        processBombPhase(matchingHandCards, matchingFloorCards[0], 'player');
-        return;
+        // Restriction: Cannot bomb if the month was already shaken
+        if (!window.playerShakenMonths.includes(playedCard.month)) {
+            processBombPhase(matchingHandCards, matchingFloorCards[0], 'player');
+            return;
+        }
     }
 
     const clickedEl = Array.from(playerHandEl.children).find(el => el.dataset.id == playedCard.id);
@@ -1121,7 +1144,7 @@ function processGiriPhase(turnOwner) {
             floorCards.push(handCard, window.turnContext.matchedFloorCards[0], giriCard);
             capturedThisTurn = []; // Nothing captured
             window.turnContext.potentialHandCapture = []; // Clear visual pending
-            showEventAlert('뻑! (싼다)', turnOwner);
+            showEventAlert('헉~ 뻑!', turnOwner);
         }
 
         floorCards.sort((a, b) => a.month - b.month);
@@ -1165,7 +1188,7 @@ function processGiriPhase(turnOwner) {
 
             // Detect Sseul (쓸 / 판쓰리)
             if (floorCards.length === 0 && capturedThisTurn.length > 0 && !isLastTurn) {
-                showEventAlert('쓸!', turnOwner);
+                showEventAlert('판쓸!', turnOwner);
                 stolenCount++;
             }
 
@@ -1337,54 +1360,48 @@ async function evaluateAnimalRules(turnOwner) {
 
     let prevAnimals = isPlayer ? window.playerAnimals : window.comAnimals;
 
-    if (currentAnimals > prevAnimals && currentAnimals >= 3) {
-        // Gain money
+    if (currentAnimals > Math.max(2, prevAnimals)) {
+        const myMultiplier = isPlayer ? window.playerMultiplier : window.comMultiplier;
         const isAnimalBak = (oppAnimals === 0);
 
-        let baseAmount = 0;
-        if (prevAnimals < 3) {
-            // 최초 3마리 도달 시 (2마리 공제)
-            baseAmount = (currentAnimals - 2) * 1000;
-        } else {
-            // 이미 3마리 이상인 상태에서의 추가 획득 (증분 계산)
-            baseAmount = (currentAnimals - prevAnimals) * 1000;
+        // Calculate the incremental base bonus for the newly acquired animals
+        let incrementalBase = (currentAnimals - Math.max(2, prevAnimals)) * 1000;
+        let finalAmountToPay = (isAnimalBak ? incrementalBase * 2 : incrementalBase) * myMultiplier;
+
+        if (finalAmountToPay > 0) {
+            // Function to format Korean money string
+            const formatMoney = (amount) => {
+                if (amount >= 10000) {
+                    let man = Math.floor(amount / 10000);
+                    let chun = amount % 10000;
+                    let str = (man > 1 ? man : "") + "만";
+                    if (chun > 0) str += (chun / 1000) + "천";
+                    return str + "원";
+                } else {
+                    const words = ["", "천원", "이천원", "삼천원", "사천원", "오천원", "육천원", "칠천원", "팔천원", "구천원"];
+                    if (amount % 1000 === 0 && amount <= 9000) {
+                        return words[amount / 1000];
+                    } else {
+                        return amount.toLocaleString() + "원";
+                    }
+                }
+            };
+
+            let suffix = "";
+            let reasons = [];
+            if (myMultiplier > 1) reasons.push(`배수x${myMultiplier}`);
+            if (isAnimalBak) reasons.push("동물박");
+            if (reasons.length > 0) suffix = ` (${reasons.join(", ")})`;
+
+            processAnimalMoney(turnOwner, finalAmountToPay);
+            if (isPlayer) window.playerAnimalBonusPaid += finalAmountToPay;
+            else window.comAnimalBonusPaid += finalAmountToPay;
+
+            let totalPaidSoFar = isPlayer ? window.playerAnimalBonusPaid : window.comAnimalBonusPaid;
+            const msg = `앗싸! 이번 수익: ${formatMoney(finalAmountToPay)}${suffix}\n(현재 동물이 ${currentAnimals}마리, 총 수익: ${formatMoney(totalPaidSoFar)})`;
+
+            await showEventAlertWithConfirm(msg, turnOwner);
         }
-
-        const myMultiplier = isPlayer ? window.playerMultiplier : window.comMultiplier;
-        let finalAmount = (isAnimalBak ? baseAmount * 2 : baseAmount);
-
-        // Convert to rough Korean word format
-        let amountStr = "";
-        let numForStr = finalAmount;
-
-        if (numForStr >= 10000) {
-            let man = Math.floor(numForStr / 10000);
-            let chun = numForStr % 10000;
-            amountStr = (man > 1 ? man : "") + "만";
-            if (chun > 0) amountStr += (chun / 1000) + "천";
-            amountStr += "원";
-        } else {
-            if (numForStr === 1000) amountStr = "천원";
-            else if (numForStr === 2000) amountStr = "이천원";
-            else if (numForStr === 3000) amountStr = "삼천원";
-            else if (numForStr === 4000) amountStr = "사천원";
-            else if (numForStr === 5000) amountStr = "오천원";
-            else if (numForStr === 6000) amountStr = "육천원";
-            else if (numForStr === 7000) amountStr = "칠천원";
-            else if (numForStr === 8000) amountStr = "팔천원";
-            else if (numForStr === 9000) amountStr = "구천원";
-            else amountStr = numForStr.toLocaleString() + "원";
-        }
-
-        let suffix = "";
-        let reasons = [];
-        if (isAnimalBak) reasons.push("동물박");
-        if (reasons.length > 0) suffix = ` (${reasons.join(", ")})`;
-
-        const msg = `앗싸! ${amountStr}${suffix}\n(현재 동물이 ${currentAnimals}마리)`;
-
-        processAnimalMoney(turnOwner, finalAmount);
-        await showEventAlertWithConfirm(msg, turnOwner);
     }
 
     // Save state
@@ -1746,9 +1763,12 @@ function playComAiCard() {
         let floorMatch = floorCards.filter(floorCard => floorCard.month === c.month);
 
         if (matchingHandCards.length === 3 && floorMatch.length === 1) {
-            isBomb = true;
-            matchingFloorCard = floorMatch[0];
-            break;
+            // Restriction: Cannot bomb if the month was already shaken
+            if (!window.comShakenMonths.includes(c.month)) {
+                isBomb = true;
+                matchingFloorCard = floorMatch[0];
+                break;
+            }
         }
     }
 
@@ -1926,30 +1946,30 @@ function showResultModal(data) {
     if (data.isDraw) {
         content = `<div class="result-main">${data.msg}</div>`;
     } else {
-        const godoriHtml = data.godori > 0 ? `<div class="result-detail-item"><span class="result-label">고도리</span><span class="result-value">+${data.godori}점</span></div>` : "";
+        const godoriHtml = data.godori > 0 ? `<div class="result-detail-item"><span class="result-label">고도리</span><span class="result-value">+${data.godori} 점</span></div>` : "";
         const danHtml = (data.hongdan || data.chodan || data.cheongdan) ?
             `<div class="result-detail-item"><span class="result-label">단 종류</span><span class="result-value">${[data.hongdan ? '홍단' : '', data.chodan ? '초단' : '', data.cheongdan ? '청단' : ''].filter(v => v).join(', ')}</span></div>` : "";
 
         content = `
             <div class="result-main">
                 <span class="result-winner">${data.title || data.winner + ' 승리!'}</span>
-                <span style="font-size: 1.8rem; color: #fff;">최종 ${data.finalScore}점</span>
+                <span style="font-size: 1.8rem; color: #fff;">최종 ${data.finalScore} 점</span>
                 <div style="color: #00d2ff; font-size: 0.9rem; margin-top: 5px;">${data.bakText}</div>
             </div>
             
             <div class="result-separator"></div>
             
             <h4>상세 점수 내역</h4>
-            <div class="result-detail-item"><span class="result-label">광</span><span class="result-value">${data.gwang}점 (${data.gwangCount}장)</span></div>
-            <div class="result-detail-item"><span class="result-label">열끝</span><span class="result-value">${data.yul}점 (${data.yulCount}장)</span></div>
+            <div class="result-detail-item"><span class="result-label">광</span><span class="result-value">${data.gwang} 점 (${data.gwangCount}장)</span></div>
+            <div class="result-detail-item"><span class="result-label">열</span><span class="result-value">${data.yul} 점 (${data.yulCount}장)</span></div>
             ${godoriHtml}
-            <div class="result-detail-item"><span class="result-label">띠</span><span class="result-value">${data.tti}점 (${data.ttiCount}장)</span></div>
+            <div class="result-detail-item"><span class="result-label">띠</span><span class="result-value">${data.tti} 점 (${data.ttiCount}장)</span></div>
             ${danHtml}
-            <div class="result-detail-item"><span class="result-label">피</span><span class="result-value">${data.pi}점 (${data.piCount}장)</span></div>
+            <div class="result-detail-item"><span class="result-label">피</span><span class="result-value">${data.pi} 점 (${data.piCount}장)</span></div>
             
             <div class="result-total-box" style="margin-top: 15px;">
-                <div class="result-detail-item" style="border:none;"><span class="result-label">족보 총합</span><span class="result-value">${data.pureTotal}점</span></div>
-                ${data.goBonus > 0 ? `<div class="result-detail-item" style="border:none;"><span class="result-label">고 보너스</span><span class="result-value">+${data.goBonus}점</span></div>` : ""}
+                <div class="result-detail-item" style="border:none;"><span class="result-label">족보 총합</span><span class="result-value">${data.pureTotal} 점</span></div>
+                ${data.goBonus > 0 ? `<div class="result-detail-item" style="border:none;"><span class="result-label">고 보너스</span><span class="result-value">+${data.goBonus} 점</span></div>` : ""}
                 ${data.multiplier > 1 ? `<div class="result-detail-item" style="border:none;"><span class="result-label">최종 배수</span><span class="result-value">x${data.multiplier}배</span></div>` : ""}
             </div>
             
