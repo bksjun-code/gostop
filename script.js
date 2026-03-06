@@ -116,16 +116,183 @@ const playerMoneyEl = document.getElementById('player-money');
 const comMoneyEl = document.getElementById('com-money');
 
 // Collected Cards Count Elements (Player)
-const pGwangCount = document.querySelector('#player-area .gwang-group .count');
-const pYulCount = document.querySelector('#player-area .yul-group .count');
-const pTtiCount = document.querySelector('#player-area .tti-group .count');
-const pPiCount = document.querySelector('#player-area .pi-group .count');
-
-// Collected Cards Count Elements (Com)
-const cGwangCount = document.querySelector('#computer-area .gwang-group .count');
-const cYulCount = document.querySelector('#computer-area .yul-group .count');
-const cTtiCount = document.querySelector('#computer-area .tti-group .count');
 const cPiCount = document.querySelector('#computer-area .pi-group .count');
+
+// --- Multiplayer State & PeerJS ---
+let isMultiplayer = false;
+let isHost = false;
+let peer = null;
+let conn = null;
+let myPeerId = null;
+
+// Initialize Multiplayer UI
+function initMultiplayerUI() {
+    const overlay = document.getElementById('multiplayer-overlay');
+    const btnShow = document.getElementById('btn-show-multiplayer');
+    const btnClose = document.getElementById('btn-close-modal');
+    const btnHost = document.getElementById('btn-host-game');
+    const btnJoin = document.getElementById('btn-join-game');
+    const joinInput = document.getElementById('join-id-input');
+    const btnWaitClose = document.getElementById('btn-wait-close');
+    const btnCloseMulti = document.getElementById('btn-close-multi-modal');
+
+    btnShow.onclick = () => overlay.style.display = 'flex';
+    btnClose.onclick = () => overlay.style.display = 'none';
+    btnWaitClose.onclick = () => overlay.style.display = 'none';
+    btnCloseMulti.onclick = () => overlay.style.display = 'none';
+
+    btnHost.onclick = () => {
+        setupPeer();
+        isHost = true;
+        document.getElementById('multi-init-section').style.display = 'none';
+        document.getElementById('host-id-section').style.display = 'block';
+    };
+
+    btnJoin.onclick = () => {
+        const id = joinInput.value.trim();
+        if (id) {
+            isHost = false;
+            setupPeer(() => {
+                connectToPeer(id);
+            });
+        } else {
+            alert('입장할 ID를 입력해주세요.');
+        }
+    };
+}
+
+function updateConnectionStatus(status, color = 'white') {
+    const el = document.getElementById('connection-status');
+    el.innerText = `상태: ${status}`;
+    el.style.color = color;
+}
+
+function setupPeer(onOpenCallback) {
+    if (peer) return;
+
+    peer = new Peer();
+
+    peer.on('open', (id) => {
+        myPeerId = id;
+        document.getElementById('my-peer-id').innerText = id;
+        updateConnectionStatus('ID 생성됨', '#ffd700');
+        if (onOpenCallback) onOpenCallback();
+    });
+
+    peer.on('connection', (c) => {
+        if (conn) {
+            c.close();
+            return;
+        }
+        conn = c;
+        setupConnection();
+    });
+
+    peer.on('error', (err) => {
+        console.error('Peer error:', err);
+        alert('연결 오류가 발생했습니다: ' + err.type);
+        updateConnectionStatus('오류 발생', '#ff5252');
+    });
+}
+
+function connectToPeer(id) {
+    conn = peer.connect(id);
+    setupConnection();
+}
+
+function setupConnection() {
+    conn.on('open', () => {
+        isMultiplayer = true;
+        updateConnectionStatus('연결됨', '#4caf50');
+        document.getElementById('multi-init-section').style.display = 'none';
+        document.getElementById('host-id-section').style.display = 'none';
+        document.getElementById('multi-connected-section').style.display = 'block';
+        document.getElementById('remote-peer-id').innerText = `상대방: ${conn.peer}`;
+
+        // Change UI labels for multiplayer
+        document.querySelector('#computer-area h2').firstChild.textContent = '상대방 ';
+
+        if (isHost) {
+            // Host sends initial game state if needed, or just waits for deal
+        }
+    });
+
+    conn.on('data', (data) => {
+        handleRemoteAction(data);
+    });
+
+    conn.on('close', () => {
+        updateConnectionStatus('연결 끊김', '#aaa');
+        isMultiplayer = false;
+        conn = null;
+    });
+}
+
+function sendAction(type, payload) {
+    if (conn && conn.open) {
+        conn.send({ type, payload });
+    }
+}
+
+function handleRemoteAction(data) {
+    console.log('Received remote action:', data);
+    const { type, payload } = data;
+
+    switch (type) {
+        case 'SYNC_INIT':
+            // Sync initial deck from host
+            deck = payload.deck;
+            lastWinner = payload.lastWinner;
+            initGame();
+            break;
+        case 'PLAY_CARD':
+            // Opponent played a card
+            handleRemotePlayCard(payload.cardId);
+            break;
+        case 'DEAL':
+            dealCards();
+            break;
+        case 'CLICK_DECK':
+            if (window.waitingForGiri) {
+                handleDeckClick();
+            }
+            break;
+    }
+}
+
+function handleRemotePlayCard(cardId) {
+    const card = fullDeck.find(c => c.id === cardId);
+    if (!card) return;
+
+    // Simulate opponent playing the card
+    // In multiplayer, the "comHand" is actually the remote player's hand
+    const cardInHand = comHand.find(c => c.id === cardId);
+    if (cardInHand) {
+        // Use the same logic as com's turn but with specific card
+        isDealing = true;
+
+        // Find matching floor cards
+        const matchingFloorCards = floorCards.filter(c => c.month === card.month);
+
+        // This is a bit simplified, ideally we'd refactor the core logic to be 
+        // player-neutral, but for now we can trigger the play sequence.
+        // For a full implementation, we'd sync Every event (bomb, stop, etc.)
+        console.log("Remote player played:", card.name);
+
+        // Trigger the COM play logic but for THIS specific card
+        // (This might require more refactoring of the original script.js)
+        executeComPlay(card);
+    }
+}
+
+function executeComPlay(playedCard) {
+    // This is a placeholder for the logic that executes a specific card play for the opponent
+    // Similar to handlePlayerPlayCard but for 'com'
+    // For now, let's assume the user will test the basic connection.
+}
+
+initMultiplayerUI();
+// ----------------------------------
 
 // Initialize Game
 function initGame() {
@@ -204,7 +371,7 @@ function renderMiniCards(container, cards, points = 0) {
         let img = document.createElement('img');
         img.src = c.imgSrc;
         img.className = 'mini-card-img';
-        img.style.left = `${idx * 15}px`;
+        img.style.left = `${idx * 15} px`;
         imgContainer.appendChild(img);
     });
 
@@ -268,9 +435,9 @@ function updateJokboBadges(owner, breakdown) {
     ];
 
     items.forEach(item => {
-        const badgeEl = container.querySelector(`.jokbo-badge.${item.key}`);
+        const badgeEl = container.querySelector(`.jokbo - badge.${item.key} `);
         if (badgeEl) {
-            console.log(`[JOKBO DEBUG] ${owner} - ${item.key}: count = ${item.count}, blocked = ${item.blocked}`);
+            console.log(`[JOKBO DEBUG] ${owner} - ${item.key}: count = ${item.count}, blocked = ${item.blocked} `);
             if (item.count === 3) {
                 badgeEl.classList.remove('emergency');
                 badgeEl.classList.add('active');
@@ -598,9 +765,23 @@ function showBombCards(owner, cards) {
 // Deal Cards (Standard rule: 10 to each player, 8 to floor)
 async function dealCards() {
     isDealing = true;
-    initGame();
-    shuffleDeck();
-    btnDeal.style.display = 'none'; // Hide deal button after dealing
+
+    if (isMultiplayer && isHost) {
+        // Host shuffles and initializes
+        initGame();
+        shuffleDeck();
+        // Send initial state to guest
+        sendAction('SYNC_INIT', {
+            deck: deck,
+            lastWinner: lastWinner
+        });
+    } else if (!isMultiplayer) {
+        initGame();
+        shuffleDeck();
+    }
+    // If guest, deck is already synced via SYNC_INIT
+
+    btnDeal.style.display = 'none';
 
     // Dealing sequence:
     // When Player is dealer (선): Floor -> Com -> Player -> Floor -> Com -> Player
@@ -710,7 +891,7 @@ function checkChongtong() {
 function handleChongtong(winner, month) {
     setTimeout(() => {
         let playerName = winner === 'Player' ? '사용자(나)' : '컴퓨터';
-        let msg = `총통! (${month}월 4장)\n${playerName}님이 처음 받은 패에 같은 달 4장이 있어 즉시 승리합니다! (5점 점수 인정)`;
+        let msg = `총통!(${month}월 4장) \n${playerName}님이 처음 받은 패에 같은 달 4장이 있어 즉시 승리합니다!(5점 점수 인정)`;
 
         let wagerResultMsg = processGameEndWager(winner.toLowerCase(), 5);
         alert(msg + "\n\n" + wagerResultMsg);
@@ -789,6 +970,10 @@ function renderBoardDealingPhase() {
 function handlePlayerPlayCard(playedCard) {
     if (currentTurn !== 'player' || isDealing || window.waitingForGiri) return;
 
+    if (isMultiplayer) {
+        sendAction('PLAY_CARD', { cardId: playedCard.id });
+    }
+
     // Check Bomb condition: 3 in hand, 1 on floor
     const matchingHandCards = playerHand.filter(c => c.month === playedCard.month);
     const matchingFloorCards = floorCards.filter(c => c.month === playedCard.month);
@@ -828,8 +1013,8 @@ function animateHandToCollection(cardObj, owner, callback) {
 
     const flyingCard = cardEl.cloneNode(true);
     flyingCard.style.position = 'fixed';
-    flyingCard.style.left = `${startRect.left}px`;
-    flyingCard.style.top = `${startRect.top}px`;
+    flyingCard.style.left = `${startRect.left} px`;
+    flyingCard.style.top = `${startRect.top} px`;
     flyingCard.style.zIndex = '9999';
     flyingCard.style.transition = 'all 0.8s cubic-bezier(0.2, 0.8, 0.2, 1)';
     flyingCard.style.margin = '0';
@@ -838,8 +1023,8 @@ function animateHandToCollection(cardObj, owner, callback) {
     cardEl.style.visibility = 'hidden';
 
     requestAnimationFrame(() => {
-        flyingCard.style.left = `${targetRect.left + 20}px`;
-        flyingCard.style.top = `${targetRect.top - 10}px`;
+        flyingCard.style.left = `${targetRect.left + 20} px`;
+        flyingCard.style.top = `${targetRect.top - 10} px`;
         flyingCard.style.transform = 'scale(0.5)';
         flyingCard.style.opacity = '0.3';
     });
@@ -867,8 +1052,8 @@ function animateDeckToHand(cardObj, owner, callback) {
     flyingCard.src = (owner === 'player') ? cardObj.imgSrc : 'real_cards/back.jpg';
     flyingCard.className = 'card-img';
     flyingCard.style.position = 'fixed';
-    flyingCard.style.left = `${deckRect.left}px`;
-    flyingCard.style.top = `${deckRect.top}px`;
+    flyingCard.style.left = `${deckRect.left} px`;
+    flyingCard.style.top = `${deckRect.top} px`;
     flyingCard.style.zIndex = '9999';
     flyingCard.style.transition = 'all 1.2s ease-in-out';
     flyingCard.style.margin = '0';
@@ -880,8 +1065,8 @@ function animateDeckToHand(cardObj, owner, callback) {
             const lastChildRect = targetEl.lastElementChild.getBoundingClientRect();
             xOffset = (lastChildRect.left - targetRect.left) + 40;
         }
-        flyingCard.style.left = `${targetRect.left + xOffset}px`;
-        flyingCard.style.top = `${targetRect.top}px`;
+        flyingCard.style.left = `${targetRect.left + xOffset} px`;
+        flyingCard.style.top = `${targetRect.top} px`;
     });
 
     let finished = false;
@@ -908,16 +1093,16 @@ function animateDeckToCollection(cardObj, owner, callback) {
     flyingCard.src = cardObj.imgSrc;
     flyingCard.className = 'card-img';
     flyingCard.style.position = 'fixed';
-    flyingCard.style.left = `${deckRect.left}px`;
-    flyingCard.style.top = `${deckRect.top}px`;
+    flyingCard.style.left = `${deckRect.left} px`;
+    flyingCard.style.top = `${deckRect.top} px`;
     flyingCard.style.zIndex = '9999';
     flyingCard.style.transition = 'all 0.8s cubic-bezier(0.2, 0.8, 0.2, 1)';
     flyingCard.style.margin = '0';
     document.body.appendChild(flyingCard);
 
     requestAnimationFrame(() => {
-        flyingCard.style.left = `${targetRect.left + 20}px`;
-        flyingCard.style.top = `${targetRect.top - 10}px`;
+        flyingCard.style.left = `${targetRect.left + 20} px`;
+        flyingCard.style.top = `${targetRect.top - 10} px`;
         flyingCard.style.transform = 'scale(0.5)';
         flyingCard.style.opacity = '0.3';
     });
@@ -1080,8 +1265,8 @@ function animateGiriCard(turnOwner) {
     flyingCard.src = giriCard.imgSrc;
     flyingCard.className = 'card-img';
     flyingCard.style.position = 'fixed';
-    flyingCard.style.left = `${deckRect.left}px`;
-    flyingCard.style.top = `${deckRect.top}px`;
+    flyingCard.style.left = `${deckRect.left} px`;
+    flyingCard.style.top = `${deckRect.top} px`;
     flyingCard.style.zIndex = '9999';
     flyingCard.style.transition = 'all 0.6s cubic-bezier(0.25, 0.8, 0.25, 1)';
     flyingCard.style.margin = '0';
@@ -1094,8 +1279,8 @@ function animateGiriCard(turnOwner) {
 
     const randomRotation = (Math.random() - 0.5) * 40;
 
-    flyingCard.style.left = `${targetX}px`;
-    flyingCard.style.top = `${targetY}px`;
+    flyingCard.style.left = `${targetX} px`;
+    flyingCard.style.top = `${targetY} px`;
     flyingCard.style.transform = `scale(1.1) rotate(${randomRotation}deg)`;
 
     let transitionFinished = false;
@@ -1389,7 +1574,7 @@ async function evaluateAnimalRules(turnOwner) {
 
             let suffix = "";
             let reasons = [];
-            if (myMultiplier > 1) reasons.push(`배수x${myMultiplier}`);
+            if (myMultiplier > 1) reasons.push(`배수x${myMultiplier} `);
             if (isAnimalBak) reasons.push("동물박");
             if (reasons.length > 0) suffix = ` (${reasons.join(", ")})`;
 
@@ -1398,7 +1583,7 @@ async function evaluateAnimalRules(turnOwner) {
             else window.comAnimalBonusPaid += finalAmountToPay;
 
             let totalPaidSoFar = isPlayer ? window.playerAnimalBonusPaid : window.comAnimalBonusPaid;
-            const msg = `앗싸! 이번 수익: ${formatMoney(finalAmountToPay)}${suffix}\n(현재 동물이 ${currentAnimals}마리, 총 수익: ${formatMoney(totalPaidSoFar)})`;
+            const msg = `앗싸! 이번 수익: ${formatMoney(finalAmountToPay)}${suffix} \n(현재 동물이 ${currentAnimals}마리, 총 수익: ${formatMoney(totalPaidSoFar)})`;
 
             await showEventAlertWithConfirm(msg, turnOwner);
         }
@@ -1467,13 +1652,13 @@ function animateCardCapture(capturedCards, turnOwner, callback) {
         flyingCard.style.position = 'fixed';
 
         // Start roughly where the floor is
-        flyingCard.style.left = `${floorRect.left + floorRect.width / 2 - 30 + (Math.random() * 60 - 30)}px`;
-        flyingCard.style.top = `${floorRect.top + floorRect.height / 2 - 47 + (Math.random() * 40 - 20)}px`;
+        flyingCard.style.left = `${floorRect.left + floorRect.width / 2 - 30 + (Math.random() * 60 - 30)} px`;
+        flyingCard.style.top = `${floorRect.top + floorRect.height / 2 - 47 + (Math.random() * 40 - 20)} px`;
         flyingCard.style.zIndex = '9999';
 
         // Slightly stagger delays
         let delay = idx * 0.1;
-        flyingCard.style.transition = `all 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) ${delay}s`;
+        flyingCard.style.transition = `all 0.5s cubic - bezier(0.2, 0.8, 0.2, 1) ${delay} s`;
         flyingCard.style.margin = '0';
         flyingCard.style.transform = `scale(1.2) rotate(${(Math.random() - 0.5) * 60}deg)`;
         flyingCard.style.pointerEvents = 'none';
@@ -1483,8 +1668,8 @@ function animateCardCapture(capturedCards, turnOwner, callback) {
         flyingCard.getBoundingClientRect(); // reflow
 
         // Move to target corner
-        flyingCard.style.left = `${targetRect.left + 50}px`;
-        flyingCard.style.top = `${targetRect.top + 30}px`;
+        flyingCard.style.left = `${targetRect.left + 50} px`;
+        flyingCard.style.top = `${targetRect.top + 30} px`;
         flyingCard.style.transform = 'scale(0.5) rotate(0deg)';
         flyingCard.style.opacity = '0.3';
 
@@ -1560,12 +1745,12 @@ function animateStealPi(taker, count, callback) {
         flyingCard.className = 'card-img';
         flyingCard.style.position = 'fixed';
 
-        flyingCard.style.left = `${sourceRect.left + 20}px`;
-        flyingCard.style.top = `${sourceRect.top - 10}px`;
+        flyingCard.style.left = `${sourceRect.left + 20} px`;
+        flyingCard.style.top = `${sourceRect.top - 10} px`;
         flyingCard.style.zIndex = '9999';
 
         let delay = idx * 0.2;
-        flyingCard.style.transition = `all 2.0s cubic-bezier(0.2, 0.8, 0.2, 1) ${delay}s`;
+        flyingCard.style.transition = `all 2.0s cubic - bezier(0.2, 0.8, 0.2, 1) ${delay} s`;
         flyingCard.style.margin = '0';
         flyingCard.style.transform = `scale(0.8) rotate(${(Math.random() - 0.5) * 30}deg)`;
         flyingCard.style.pointerEvents = 'none';
@@ -1576,8 +1761,8 @@ function animateStealPi(taker, count, callback) {
         flyingCard.getBoundingClientRect();
 
         // Set destination
-        flyingCard.style.left = `${targetRect.left + 20}px`;
-        flyingCard.style.top = `${targetRect.top - 10}px`;
+        flyingCard.style.left = `${targetRect.left + 20} px`;
+        flyingCard.style.top = `${targetRect.top - 10} px`;
         flyingCard.style.transform = 'scale(0.5) rotate(0deg)';
         flyingCard.style.opacity = '0.3';
 
@@ -1854,7 +2039,7 @@ function endGame(explicitWinner = null) {
                 // If it was a bomb or shake, let's just use "흔들기/폭탄" to keep it simple, 
                 // but usually they are both x2 (or x4 if double shook)
                 let label = (winner === 'Player' ? window.playerShook : window.comShook) ? "흔들기/폭탄" : "배수";
-                bakMsgs.push(`${label}(x${winnerMultiplier})`);
+                bakMsgs.push(`${label} (x${winnerMultiplier})`);
             }
 
             // 광박
@@ -1879,16 +2064,16 @@ function endGame(explicitWinner = null) {
             if (winnerGoCount >= 3) {
                 let goMult = Math.pow(2, winnerGoCount - 2);
                 totalMultiplier *= goMult;
-                bakMsgs.push(`${winnerGoCount}고(x${goMult})`);
+                bakMsgs.push(`${winnerGoCount} 고(x${goMult})`);
             } else if (winnerGoCount > 0) {
-                bakMsgs.push(`${winnerGoCount}고`);
+                bakMsgs.push(`${winnerGoCount} 고`);
             }
 
             finalScore *= totalMultiplier;
             winnerScoreInfo.multiplierObj = totalMultiplier;
             winnerScoreInfo.goBonusObj = goBonusPoints;
 
-            let bakText = bakMsgs.length > 0 ? ` [${bakMsgs.join(", ")}] 적용` : "";
+            let bakText = bakMsgs.length > 0 ? ` [${bakMsgs.join(", ")}]적용` : "";
 
             if (winner === 'Player') {
                 playerScoreEl.innerText = finalScore;
@@ -1944,18 +2129,18 @@ function showResultModal(data) {
 
     let content = "";
     if (data.isDraw) {
-        content = `<div class="result-main">${data.msg}</div>`;
+        content = `< div class="result-main" > ${data.msg}</div > `;
     } else {
-        const godoriHtml = data.godori > 0 ? `<div class="result-detail-item"><span class="result-label">고도리</span><span class="result-value">+${data.godori} 점</span></div>` : "";
+        const godoriHtml = data.godori > 0 ? `< div class="result-detail-item" ><span class="result-label">고도리</span><span class="result-value">+${data.godori} 점</span></div > ` : "";
         const danHtml = (data.hongdan || data.chodan || data.cheongdan) ?
-            `<div class="result-detail-item"><span class="result-label">단 종류</span><span class="result-value">${[data.hongdan ? '홍단' : '', data.chodan ? '초단' : '', data.cheongdan ? '청단' : ''].filter(v => v).join(', ')}</span></div>` : "";
+            `< div class="result-detail-item" ><span class="result-label">단 종류</span><span class="result-value">${[data.hongdan ? '홍단' : '', data.chodan ? '초단' : '', data.cheongdan ? '청단' : ''].filter(v => v).join(', ')}</span></div > ` : "";
 
         content = `
-            <div class="result-main">
+    < div class="result-main" >
                 <span class="result-winner">${data.title || data.winner + ' 승리!'}</span>
                 <span style="font-size: 1.8rem; color: #fff;">최종 ${data.finalScore} 점</span>
                 <div style="color: #00d2ff; font-size: 0.9rem; margin-top: 5px;">${data.bakText}</div>
-            </div>
+            </div >
             
             <div class="result-separator"></div>
             
@@ -1963,7 +2148,7 @@ function showResultModal(data) {
             <div class="result-detail-item"><span class="result-label">광</span><span class="result-value">${data.gwang} 점 (${data.gwangCount}장)</span></div>
             <div class="result-detail-item"><span class="result-label">열</span><span class="result-value">${data.yul} 점 (${data.yulCount}장)</span></div>
             ${godoriHtml}
-            <div class="result-detail-item"><span class="result-label">띠</span><span class="result-value">${data.tti} 점 (${data.ttiCount}장)</span></div>
+<div class="result-detail-item"><span class="result-label">띠</span><span class="result-value">${data.tti} 점 (${data.ttiCount}장)</span></div>
             ${danHtml}
             <div class="result-detail-item"><span class="result-label">피</span><span class="result-value">${data.pi} 점 (${data.piCount}장)</span></div>
             
@@ -1976,7 +2161,7 @@ function showResultModal(data) {
             <div style="background: rgba(0, 210, 255, 0.1); padding: 10px; border-radius: 8px; font-size: 0.95rem; text-align: center;">
                 ${data.wagerMsg}
             </div>
-        `;
+`;
     }
 
     body.innerHTML = content;
@@ -2058,8 +2243,8 @@ function animateCardThrow(sourceEl, cardObj, turnOwner, callback) {
     flyingCard.src = cardObj.imgSrc;
     flyingCard.className = 'card-img';
     flyingCard.style.position = 'fixed';
-    flyingCard.style.left = `${startRect.left}px`;
-    flyingCard.style.top = `${startRect.top}px`;
+    flyingCard.style.left = `${startRect.left} px`;
+    flyingCard.style.top = `${startRect.top} px`;
     flyingCard.style.zIndex = '9999';
     flyingCard.style.transition = 'all 0.6s cubic-bezier(0.2, 0.8, 0.2, 1)';
     flyingCard.style.margin = '0';
@@ -2074,8 +2259,8 @@ function animateCardThrow(sourceEl, cardObj, turnOwner, callback) {
 
     const randomRotation = (Math.random() - 0.5) * 40;
 
-    flyingCard.style.left = `${targetX}px`;
-    flyingCard.style.top = `${targetY}px`;
+    flyingCard.style.left = `${targetX} px`;
+    flyingCard.style.top = `${targetY} px`;
     flyingCard.style.transform = `scale(1.1) rotate(${randomRotation}deg)`;
 
     flyingCard.addEventListener('transitionend', () => {
@@ -2132,8 +2317,8 @@ document.getElementById('deck').addEventListener('click', () => {
 const style = document.createElement('style');
 style.innerHTML = `
 @keyframes fadeOutUp {
-    0% { opacity: 1; transform: translate(-50%, -50%); }
-    100% { opacity: 0; transform: translate(-50%, -150%); }
+    0 % { opacity: 1; transform: translate(-50 %, -50 %); }
+    100 % { opacity: 0; transform: translate(-50 %, -150 %); }
 }
 `;
 document.head.appendChild(style);
@@ -2144,7 +2329,7 @@ initGame();
 // --- Go/Stop Logic ---
 function promptGoStop(turnOwner, currentScore) {
     if (turnOwner === 'player') {
-        document.getElementById('gostop-message').innerText = `${currentScore}점이 났습니다! 고(Go) 하시겠습니까?`;
+        document.getElementById('gostop-message').innerText = `${currentScore}점이 났습니다! 고(Go) 하시겠습니까 ? `;
         document.getElementById('gostop-selection-overlay').style.display = 'flex';
 
         // Remove old listeners to prevent multiple fires
@@ -2173,18 +2358,18 @@ function handleGo(turnOwner) {
 
         let badge = document.getElementById('player-go-count');
         badge.style.display = 'inline';
-        badge.innerText = `${window.playerGoCount}고`;
+        badge.innerText = `${window.playerGoCount} 고`;
 
-        showEventAlert(`${window.playerGoCount}고!`, 'player');
+        showEventAlert(`${window.playerGoCount} 고!`, 'player');
     } else {
         window.comGoCount++;
         window.comMaxScore = calculateScore(comCollected, 'com').total;
 
         let badge = document.getElementById('com-go-count');
         badge.style.display = 'inline';
-        badge.innerText = `${window.comGoCount}고`;
+        badge.innerText = `${window.comGoCount} 고`;
 
-        showEventAlert(`${window.comGoCount}고!`, 'com');
+        showEventAlert(`${window.comGoCount} 고!`, 'com');
     }
 
     setTimeout(() => proceedToNextTurn(turnOwner), 1500);
