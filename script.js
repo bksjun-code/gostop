@@ -142,8 +142,8 @@ function initMultiplayerUI() {
     btnCloseMulti.onclick = () => overlay.style.display = 'none';
 
     btnHost.onclick = () => {
-        setupPeer();
         isHost = true;
+        setupPeer();
         document.getElementById('multi-init-section').style.display = 'none';
         document.getElementById('host-id-section').style.display = 'block';
     };
@@ -170,7 +170,10 @@ function updateConnectionStatus(status, color = 'white') {
 function setupPeer(onOpenCallback) {
     if (peer) return;
 
-    peer = new Peer();
+    // Generate a short 6-digit numeric ID for easier sharing
+    const shortId = isHost ? Math.floor(100000 + Math.random() * 900000).toString() : undefined;
+
+    peer = new Peer(shortId);
 
     peer.on('open', (id) => {
         myPeerId = id;
