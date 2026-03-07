@@ -7,6 +7,7 @@ const animalCardCounts = {
     '06_yul.jpg': 2,
     '07_yul.jpg': 3,
     '08_yul.jpg': 3,
+    '08_gwang.jpg': 1,
     '10_yul.jpg': 1,
     '11_gwang.jpg': 1,
     '12_gwang.jpg': 2,
@@ -1705,6 +1706,15 @@ function promptGiriFlip(turnOwner) {
     if (turnOwner === 'player') {
         window.waitingForGiri = true;
         document.getElementById('deck').classList.add('clickable-deck');
+
+        // Automate deck flip with a short delay (1000ms)
+        setTimeout(() => {
+            if (window.waitingForGiri && currentTurn === 'player' && !isDealing) {
+                window.waitingForGiri = false;
+                document.getElementById('deck').classList.remove('clickable-deck');
+                animateGiriCard('player');
+            }
+        }, 1000);
     } else {
         if (isMultiplayer) {
             // Multiplayer: Wait for CLICK_DECK action from remote.
