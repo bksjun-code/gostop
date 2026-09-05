@@ -122,6 +122,9 @@ const comMoneyEl = document.getElementById('com-money');
 // Collected Cards Count Elements (Player)
 const cPiCount = document.querySelector('#computer-area .pi-group .count');
 
+// --- Spectator Mode (AI vs AI) ---
+let isSpectatorMode = false;
+
 // --- Multiplayer State & PeerJS ---
 let isMultiplayer = false;
 let isHost = false;
@@ -140,7 +143,13 @@ function initMultiplayerUI() {
     const btnWaitClose = document.getElementById('btn-wait-close');
     const btnCloseMulti = document.getElementById('btn-close-multi-modal');
 
-    btnShow.onclick = () => overlay.style.display = 'flex';
+    btnShow.onclick = () => {
+        if (isSpectatorMode) {
+            alert('관전모드 중에는 멀티플레이를 사용할 수 없습니다.');
+            return;
+        }
+        overlay.style.display = 'flex';
+    };
     btnClose.onclick = () => overlay.style.display = 'none';
     btnWaitClose.onclick = () => overlay.style.display = 'none';
     btnCloseMulti.onclick = () => overlay.style.display = 'none';
@@ -857,20 +866,20 @@ function renderBoard() {
     playerHandEl.innerHTML = '';
     playerHand.forEach((card, index) => {
         let clickable = null;
-        if (currentTurn === 'player' && !isDealing) {
+        if (currentTurn === 'player' && !isDealing && !isSpectatorMode) {
             clickable = (card.type === 'bonus') ? (c => handlePlayBonusCard(c, 'player')) : handlePlayerPlayCard;
         }
         const cardEl = createCardElement(card, false, clickable);
         // Add dynamic z-index so overlapping works cleanly left to right
         cardEl.style.zIndex = index;
-        if (currentTurn === 'player') cardEl.classList.add('playable');
+        if (currentTurn === 'player' && !isSpectatorMode) cardEl.classList.add('playable');
         if (card.type === 'bonus' && currentTurn === 'player') cardEl.classList.add('bonus-card');
         playerHandEl.appendChild(cardEl);
     });
 
     comHandEl.innerHTML = '';
     comHand.forEach((card, index) => {
-        const cardEl = createCardElement(card, true); // True for hidden
+        const cardEl = createCardElement(card, !isSpectatorMode); // Reveal com's hand while spectating
         cardEl.style.zIndex = index;
         comHandEl.appendChild(cardEl);
     });
@@ -916,7 +925,7 @@ function renderBoard() {
 
 function checkShakeAvailability() {
     const btnShake = document.getElementById('btn-shake');
-    if (currentTurn === 'player' && !window.playerShook && !isDealing) {
+    if (currentTurn === 'player' && !window.playerShook && !isDealing && !isSpectatorMode) {
         let shakeMonth = -1;
         for (let i = 1; i <= 12; i++) {
             if (playerHand.filter(c => c.month === i).length === 3) {
@@ -1112,9 +1121,9 @@ async function dealCards(isAlreadySynced = false) {
             return;
         }
 
-        // If Com is dealer, trigger com's first play after a short delay
-        if (currentTurn === 'com' && !isMultiplayer) {
-            setTimeout(playComTurn, 1000);
+        // If the dealer's turn is AI-controlled, trigger their first play after a short delay
+        if (isAiControlled(currentTurn)) {
+            setTimeout(() => playAiTurn(currentTurn), 1000);
         }
 
         // In multiplayer, the dealer updates the button visibility for themselves
@@ -1343,6 +1352,13 @@ function processGameEndWager(winnerStr, score, titleOverride = null) {
 
 function checkBankruptcyAndRestart() {
     if (playerMoney <= 0 || comMoney <= 0) {
+        // Spectator mode: no one is there to confirm, so restart automatically and keep watching.
+        if (!isMultiplayer && isSpectatorMode) {
+            executeRestart();
+            maybeAutoDeal();
+            return;
+        }
+
         const modal = document.getElementById('restart-modal');
         const title = document.getElementById('restart-modal-title');
         const msg = document.getElementById('restart-modal-msg');
@@ -1352,7 +1368,20 @@ function checkBankruptcyAndRestart() {
         msg.innerHTML = `${bankruptPerson}가 파산했습니다.<br>보유 금액을 1,000,000원으로 초기화하고 새로 시작하시겠습니까?`;
 
         modal.style.display = 'flex';
+        return;
     }
+
+    maybeAutoDeal();
+}
+
+// Spectator mode: automatically start the next round once the deal button becomes available.
+function maybeAutoDeal() {
+    if (isMultiplayer || !isSpectatorMode) return;
+    setTimeout(() => {
+        if (isSpectatorMode && !isDealing && btnDeal.style.display !== 'none') {
+            dealCards();
+        }
+    }, 800);
 }
 
 function executeRestart() {
@@ -1389,7 +1418,7 @@ function renderBoardDealingPhase() {
 
     comHandEl.innerHTML = '';
     comHand.forEach((card, index) => {
-        const cardEl = createCardElement(card, true); // True for hidden
+        const cardEl = createCardElement(card, !isSpectatorMode); // Reveal com's hand while spectating
         cardEl.style.zIndex = index;
         comHandEl.appendChild(cardEl);
     });
@@ -1624,8 +1653,8 @@ async function handlePlayBonusCard(card, owner) {
     renderBoard();
 
     // TURN CONTINUES
-    if (owner === 'com' && !isMultiplayer) {
-        setTimeout(playComAiCard, 600);
+    if (isAiControlled(owner)) {
+        setTimeout(() => playAiCard(owner), 600);
     } else {
         // Re-attach listeners to the updated hand just in case
         renderBoard(); // Forces recreation of elements with correct bindings
@@ -1676,7 +1705,7 @@ function processPlayPhase(playedCard, turnOwner) {
         promptGiriFlip(turnOwner);
     } else if (matchedFloorCards.length === 2) {
         // 2 matches -> User / Com must select which one to take
-        if (turnOwner === 'player') {
+        if (turnOwner === 'player' && !isSpectatorMode) {
             showCardSelection(matchedFloorCards, (selectedCard) => {
                 if (isMultiplayer) {
                     sendAction('SELECT_FLOOR', { cardId: selectedCard.id });
@@ -1999,7 +2028,7 @@ function processGiriPhase(turnOwner) {
                 finishGiriPhase();
             }
         } else if (matchedFloorCards.length === 2) {
-            if (turnOwner === 'player') {
+            if (turnOwner === 'player' && !isSpectatorMode) {
                 showCardSelection(matchedFloorCards, (selectedCard) => {
                     if (isMultiplayer) {
                         sendAction('SELECT_FLOOR', { cardId: selectedCard.id });
@@ -2167,6 +2196,15 @@ function showEventAlertWithConfirm(message, owner) {
         document.body.appendChild(overlay);
 
         btn.focus();
+
+        // Spectator mode: no one is there to click confirm, so auto-dismiss shortly after showing it.
+        if (!isMultiplayer && isSpectatorMode) {
+            setTimeout(() => {
+                if (typeof window.activeAlertResolver === 'function') {
+                    window.activeAlertResolver();
+                }
+            }, 1500);
+        }
     });
 }
 
@@ -2308,8 +2346,8 @@ function proceedToNextTurn(turnOwner) {
         }
 
         renderBoard();
-        if (currentTurn === 'com' && !isMultiplayer) {
-            setTimeout(playComTurn, 600);
+        if (isAiControlled(currentTurn)) {
+            setTimeout(() => playAiTurn(currentTurn), 600);
         }
     }, 600);
 }
@@ -2582,18 +2620,26 @@ function processBombPhase(handCards, floorCard, turnOwner) {
     });
 }
 
-function playComTurn() {
-    if (isMultiplayer || comHand.length === 0 || currentTurn !== 'com') return;
+// Returns true if the AI is allowed to auto-play this turnOwner's turn right now
+// (the real 'com' side always; the 'player' side only while spectator mode is on).
+function isAiControlled(turnOwner) {
+    if (isMultiplayer) return false;
+    return turnOwner === 'com' || (turnOwner === 'player' && isSpectatorMode);
+}
+
+function playAiTurn(owner) {
+    const hand = owner === 'player' ? playerHand : comHand;
+    if (!isAiControlled(owner) || hand.length === 0 || currentTurn !== owner) return;
 
     if (isDealing) {
-        setTimeout(playComTurn, 500);
+        setTimeout(() => playAiTurn(owner), 500);
         return;
     }
 
-    if (window.comEmptyTurns > 0) {
+    if (window[owner + 'EmptyTurns'] > 0) {
         // AI Choice: Skip or Play?
         let hasMatch = false;
-        for (let c of comHand) {
+        for (let c of hand) {
             if (floorCards.some(f => f.month === c.month)) {
                 hasMatch = true;
                 break;
@@ -2603,16 +2649,16 @@ function playComTurn() {
         // If no match, strongly prefer skipping to save cards.
         // If match exists, 50% chance to still skip to stay "ahead".
         if (!hasMatch || Math.random() < 0.5) {
-            handleEmptyTurn('com');
+            handleEmptyTurn(owner);
             return;
         }
     }
 
     // AI Shake Logic
-    if (!window.comShook) {
+    if (!window[owner + 'Shook']) {
         let monthToShake = -1;
         for (let i = 1; i <= 12; i++) {
-            if (comHand.filter(c => c.month === i).length === 3) {
+            if (hand.filter(c => c.month === i).length === 3) {
                 // Shake condition: must have 3 in hand AND 0 on floor for that month
                 const floorMatch = floorCards.some(fc => fc.month === i);
                 if (!floorMatch) {
@@ -2624,25 +2670,28 @@ function playComTurn() {
 
         // Randomly decide to shake if reachable (70% chance)
         if (monthToShake !== -1 && Math.random() < 0.7) {
-            executeShake('com', monthToShake);
+            executeShake(owner, monthToShake);
             // Give brief delay before playing card so shake is visible
-            setTimeout(playComAiCard, 2000);
+            setTimeout(() => playAiCard(owner), 2000);
             return;
         }
     }
 
-    playComAiCard();
+    playAiCard(owner);
 }
 
-function playComAiCard() {
-    if (isMultiplayer) return;
+function playAiCard(owner) {
+    if (!isAiControlled(owner)) return;
+
+    const hand = owner === 'player' ? playerHand : comHand;
+    const handEl = owner === 'player' ? playerHandEl : comHandEl;
 
     // Dumb AI: Try to find a card that matches the floor
     // Check for bonus cards first
-    let bonusCard = comHand.find(c => c.type === 'bonus');
+    let bonusCard = hand.find(c => c.type === 'bonus');
     if (bonusCard) {
-        handlePlayBonusCard(bonusCard, 'com');
-        return; // handlePlayBonusCard will call playComAiCard again
+        handlePlayBonusCard(bonusCard, owner);
+        return; // handlePlayBonusCard will call playAiCard again
     }
 
     let cardToPlay = null;
@@ -2651,13 +2700,13 @@ function playComAiCard() {
     let matchingFloorCard = null;
 
     // Check for bomb first
-    for (let c of comHand) {
-        matchingHandCards = comHand.filter(handCard => handCard.month === c.month);
+    for (let c of hand) {
+        matchingHandCards = hand.filter(handCard => handCard.month === c.month);
         let floorMatch = floorCards.filter(floorCard => floorCard.month === c.month);
 
         if (matchingHandCards.length === 3 && floorMatch.length === 1) {
             // Restriction: Cannot bomb if the month was already shaken
-            if (!window.comShakenMonths.includes(c.month)) {
+            if (!window[owner + 'ShakenMonths'].includes(c.month)) {
                 isBomb = true;
                 matchingFloorCard = floorMatch[0];
                 break;
@@ -2666,15 +2715,15 @@ function playComAiCard() {
     }
 
     if (isBomb) {
-        // Initialize context for Com bomb
+        // Initialize context for AI bomb
         window.turnContext.playedCard = matchingHandCards[0];
         window.turnContext.matchedFloorCards = [matchingFloorCard];
         window.turnContext.potentialHandCapture = [];
-        processBombPhase(matchingHandCards, matchingFloorCard, 'com');
+        processBombPhase(matchingHandCards, matchingFloorCard, owner);
         return;
     }
 
-    for (let c of comHand) {
+    for (let c of hand) {
         if (floorCards.some(f => f.month === c.month)) {
             cardToPlay = c;
             break;
@@ -2683,15 +2732,19 @@ function playComAiCard() {
 
     // If no match, just play the first card
     if (!cardToPlay) {
-        cardToPlay = comHand[0];
+        cardToPlay = hand[0];
     }
 
-    const cardEl = Array.from(comHandEl.children).find(el => el.dataset.id == cardToPlay.id) || comHandEl.lastElementChild;
+    const cardEl = Array.from(handEl.children).find(el => el.dataset.id == cardToPlay.id) || handEl.lastElementChild;
 
-    animateCardThrow(cardEl, cardToPlay, 'com', () => {
+    animateCardThrow(cardEl, cardToPlay, owner, () => {
         if (window.playCardSound) window.playCardSound();
-        comHand = comHand.filter(c => c.id !== cardToPlay.id);
-        processPlayPhase(cardToPlay, 'com');
+        if (owner === 'player') {
+            playerHand = playerHand.filter(c => c.id !== cardToPlay.id);
+        } else {
+            comHand = comHand.filter(c => c.id !== cardToPlay.id);
+        }
+        processPlayPhase(cardToPlay, owner);
     });
 }
 
@@ -2900,6 +2953,11 @@ function showResultModal(data) {
     contentEl.style.top = '50%';
     contentEl.style.left = '50%';
     contentEl.style.transform = 'translate(-50%, -50%)';
+
+    // Spectator mode: no one is there to click confirm, so auto-advance to the next round.
+    if (!isMultiplayer && isSpectatorMode) {
+        setTimeout(() => closeResultModal(), 2500);
+    }
 }
 
 function closeResultModal(isRemote = false) {
@@ -3034,14 +3092,14 @@ function showCardSelection(options, onSelect) {
 btnDeal.addEventListener('click', dealCards);
 document.getElementById('btn-shake').addEventListener('click', function () {
     // 플레이어 턴일 때만 유효함
-    if (currentTurn === 'player' && !isDealing) {
+    if (currentTurn === 'player' && !isDealing && !isSpectatorMode) {
         const month = parseInt(this.dataset.month);
         executeShake('player', month);
     }
 });
 
 document.getElementById('deck').addEventListener('click', () => {
-    if (currentTurn !== 'player' || isDealing) return;
+    if (currentTurn !== 'player' || isDealing || isSpectatorMode) return;
 
     if (isMultiplayer) {
         sendAction('CLICK_DECK', {});
@@ -3067,13 +3125,38 @@ style.innerHTML = `
 `;
 document.head.appendChild(style);
 
+// --- Spectator Mode Toggle ---
+document.getElementById('btn-spectator-mode').addEventListener('click', function () {
+    if (isMultiplayer) {
+        alert('멀티플레이 중에는 관전모드를 사용할 수 없습니다.');
+        return;
+    }
+
+    isSpectatorMode = !isSpectatorMode;
+    this.style.backgroundColor = isSpectatorMode ? '#2e7d32' : '#555';
+    this.innerText = isSpectatorMode ? '관전모드 (ON)' : '관전모드';
+
+    renderBoard();
+
+    // If it's already the player's turn waiting for a move, hand it off to the AI now.
+    if (isSpectatorMode && currentTurn === 'player' && !isDealing && !window.waitingForGiri) {
+        playAiTurn('player');
+    }
+});
+
 // Start with initialized empty board
 initGame();
 updateDealButtonVisibility();
 
 // --- Go/Stop Logic ---
 function promptGoStop(turnOwner, currentScore) {
-    if (turnOwner === 'player') {
+    if (turnOwner === 'player' && isSpectatorMode) {
+        document.getElementById('gostop-message').innerText = `${currentScore}점이 났습니다! (관전 모드) 상대방의 선택을 기다리는 중...`;
+        document.getElementById('gostop-selection-overlay').style.display = 'flex';
+        document.getElementById('btn-go').disabled = true;
+        document.getElementById('btn-stop').disabled = true;
+        setTimeout(() => playAiGoStop('player', currentScore), 1500);
+    } else if (turnOwner === 'player') {
         document.getElementById('gostop-message').innerText = `${currentScore}점이 났습니다! 고(Go) 하시겠습니까 ? `;
         document.getElementById('gostop-selection-overlay').style.display = 'flex';
 
@@ -3099,7 +3182,7 @@ function promptGoStop(turnOwner, currentScore) {
             document.getElementById('btn-stop').disabled = true;
         } else {
             // AI Logic
-            setTimeout(() => playComGoStop(currentScore), 1500);
+            setTimeout(() => playAiGoStop('com', currentScore), 1500);
         }
     }
 }
@@ -3156,17 +3239,17 @@ function handleStop(turnOwner) {
     setTimeout(() => endGame(turnOwner), 1500);
 }
 
-function playComGoStop(currentScore) {
+function playAiGoStop(owner, currentScore) {
     if (isMultiplayer) return;
-    let comGoCount = window.comGoCount;
+    let goCount = window[owner + 'GoCount'];
     // Simple AI logic
-    if (currentScore >= 7 || comGoCount >= 2) {
-        handleStop('com');
+    if (currentScore >= 7 || goCount >= 2) {
+        handleStop(owner);
     } else {
         if (Math.random() < 0.7) {
-            handleGo('com');
+            handleGo(owner);
         } else {
-            handleStop('com');
+            handleStop(owner);
         }
     }
 }
